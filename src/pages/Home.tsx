@@ -28,19 +28,19 @@ const HERO_IMAGES = [
   {
     src: "/assets/bird-king-kai.png",
     alt: "Bird King Kai character",
-    fadeStop: "70%",
+    fadeStop: "65%",
     className: "",
   },
   {
     src: "/assets/hostbot.png",
     alt: "Hostbot character",
-    fadeStop: "62%",
+    fadeStop: "65%",
     className: "",
   },
   {
     src: "/assets/josh.png",
     alt: "Josh character",
-    fadeStop: "68%",
+    fadeStop: "65%",
     className: "",
   },
 ]
@@ -77,7 +77,7 @@ function Home() {
       <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 pb-20 pt-10">
         <section className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="flex flex-col gap-6 pt-4">
-            <div className="relative h-72 w-full max-w-sm overflow-hidden px-2 animate-fade-up [animation-delay:60ms] sm:h-80 lg:h-96">
+            <div className="relative h-80 w-full max-w-sm overflow-hidden px-2 animate-fade-up [animation-delay:60ms] sm:h-96 lg:h-[30rem]">
               {HERO_IMAGES.map((image, index) => (
                 <img
                   key={image.src}
