@@ -106,23 +106,11 @@ function Home() {
             <div className="flex flex-wrap gap-3 animate-fade-up [animation-delay:320ms]">
               <Button asChild size="lg">
                 <a href={TWITCH_URL} target="_blank" rel="noreferrer">
-                  <img
-                    src="/assets/brand-icons/twitch.svg"
-                    alt=""
-                    className="h-4 w-4"
-                    aria-hidden="true"
-                  />
                   Watch on Twitch
                 </a>
               </Button>
               <Button asChild variant="secondary" size="lg">
                 <a href={discordLink.href} target="_blank" rel="noreferrer">
-                  <img
-                    src="/assets/brand-icons/discord.svg"
-                    alt=""
-                    className="h-4 w-4"
-                    aria-hidden="true"
-                  />
                   Join Discord
                 </a>
               </Button>
