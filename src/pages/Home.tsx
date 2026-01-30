@@ -138,21 +138,6 @@ function Home() {
               </CardContent>
             </Card>
 
-            <Card className="animate-fade-up [animation-delay:440ms]">
-              <CardHeader>
-                <CardTitle className="font-display text-lg uppercase tracking-[0.2em] text-white/80">
-                  Guest Access
-                </CardTitle>
-                <CardDescription>
-                  Private portal for invited characters and crew.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button asChild variant="outline">
-                  <Link to="/access">Enter Access Portal</Link>
-                </Button>
-              </CardContent>
-            </Card>
           </div>
         </section>
 
