@@ -1,3 +1,4 @@
+import { type CSSProperties, useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 
 import SpaceBackdrop from "@/components/SpaceBackdrop"
@@ -23,9 +24,39 @@ const SOCIAL_ICONS: Record<string, string> = {
   Twitter: "/assets/brand-icons/x.svg",
 }
 
+const HERO_IMAGES = [
+  {
+    src: "/assets/bird-king-kai.png",
+    alt: "Bird King Kai character",
+    fadeStop: "70%",
+    className: "",
+  },
+  {
+    src: "/assets/hostbot.png",
+    alt: "Hostbot character",
+    fadeStop: "62%",
+    className: "",
+  },
+  {
+    src: "/assets/josh.png",
+    alt: "Josh character",
+    fadeStop: "68%",
+    className: "",
+  },
+]
+
 function Home() {
   const status = useTwitchLiveStatus("renderedsenseless")
   const discordLink = SOCIAL_LINKS[0]
+  const [heroIndex, setHeroIndex] = useState(0)
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setHeroIndex((current) => (current + 1) % HERO_IMAGES.length)
+    }, 4500)
+
+    return () => window.clearInterval(interval)
+  }, [])
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -46,6 +77,24 @@ function Home() {
       <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 pb-20 pt-10">
         <section className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="flex flex-col gap-6 pt-4">
+            <div className="relative h-72 w-full max-w-sm overflow-hidden px-2 animate-fade-up [animation-delay:60ms] sm:h-80 lg:h-96">
+              {HERO_IMAGES.map((image, index) => (
+                <img
+                  key={image.src}
+                  src={image.src}
+                  alt={index === heroIndex ? image.alt : ""}
+                  aria-hidden={index !== heroIndex}
+                  style={
+                    {
+                      "--fade-mask-stop": image.fadeStop ?? "60%",
+                    } as CSSProperties
+                  }
+                  className={`absolute bottom-0 left-1/2 h-auto w-auto max-h-full max-w-full -translate-x-1/2 transition-opacity duration-700 ease-in-out fade-mask-bottom ${image.className} ${
+                    index === heroIndex ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+              ))}
+            </div>
             <h1 className="font-display text-xl leading-tight text-[#65da97] animate-fade-up [animation-delay:120ms]">
               Earth's first interactive talk show... in space.
             </h1>

@@ -145,13 +145,13 @@ img {
     -webkit-mask-image: linear-gradient(
       to bottom,
       rgba(0, 0, 0, 1) 0%,
-      rgba(0, 0, 0, 1) 45%,
+      rgba(0, 0, 0, 1) var(--fade-mask-stop, 60%),
       rgba(0, 0, 0, 0) 100%
     );
     mask-image: linear-gradient(
       to bottom,
       rgba(0, 0, 0, 1) 0%,
-      rgba(0, 0, 0, 1) 45%,
+      rgba(0, 0, 0, 1) var(--fade-mask-stop, 60%),
       rgba(0, 0, 0, 0) 100%
     );
     -webkit-mask-repeat: no-repeat;
