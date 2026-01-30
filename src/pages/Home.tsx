@@ -53,7 +53,7 @@ function Home() {
   useEffect(() => {
     const interval = window.setInterval(() => {
       setHeroIndex((current) => (current + 1) % HERO_IMAGES.length)
-    }, 4500)
+    }, 6500)
 
     return () => window.clearInterval(interval)
   }, [])
@@ -77,7 +77,7 @@ function Home() {
       <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 pb-20 pt-10">
         <section className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="flex flex-col gap-6 pt-4">
-            <div className="relative h-80 w-full max-w-sm overflow-hidden px-2 animate-fade-up [animation-delay:60ms] sm:h-96 lg:h-[30rem]">
+            <div className="relative w-full max-w-sm aspect-square overflow-hidden px-2 animate-fade-up [animation-delay:60ms]">
               {HERO_IMAGES.map((image, index) => (
                 <img
                   key={image.src}
@@ -89,7 +89,7 @@ function Home() {
                       "--fade-mask-stop": image.fadeStop ?? "60%",
                     } as CSSProperties
                   }
-                  className={`absolute bottom-0 left-1/2 h-auto w-auto max-h-full max-w-full -translate-x-1/2 transition-opacity duration-700 ease-in-out fade-mask-bottom ${image.className} ${
+                  className={`absolute bottom-0 left-1/2 h-auto w-auto max-h-full max-w-full -translate-x-1/2 transition-opacity duration-[1200ms] ease-in-out fade-mask-bottom ${image.className} ${
                     index === heroIndex ? "opacity-100" : "opacity-0"
                   }`}
                 />
