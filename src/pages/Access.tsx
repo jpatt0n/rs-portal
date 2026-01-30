@@ -2,13 +2,7 @@ import { Link } from "react-router-dom"
 
 import SpaceBackdrop from "@/components/SpaceBackdrop"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 function Access() {
   return (
@@ -26,10 +20,10 @@ function Access() {
 
       <main className="relative z-10 mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 pb-20 pt-16">
         <div className="max-w-2xl">
-          <h1 className="font-display pixel-shadow text-3xl text-[color:var(--accent)] sm:text-4xl">
+          <h1 className="font-display text-2xl text-[#65da97]">
             Access Portal
           </h1>
-          <p className="mt-4 text-base text-white/70">
+          <p className="mt-4 text-base text-white/90">
             This is the private entry point for guest characters and crew.
             Authentication will be wired in once the Unity render streaming
             login is integrated.
@@ -38,12 +32,9 @@ function Access() {
 
         <Card className="max-w-3xl">
           <CardHeader>
-            <CardTitle className="font-display text-lg uppercase tracking-[0.2em] text-white/80">
+            <CardTitle className="font-display text-lg tracking-[0.2em] text-white/80">
               Crew Login (Coming Soon)
             </CardTitle>
-            <CardDescription>
-              Placeholder access flow. Keep this URL for invited guests.
-            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -67,7 +58,7 @@ function Access() {
             <Button variant="outline" disabled>
               Authenticate (offline)
             </Button>
-            <p className="text-xs text-white/50">
+            <p className="text-xs text-white/90">
               We will plug in the real-time show login once the streaming stack
               is connected. This page is intentionally quiet but discoverable.
             </p>
