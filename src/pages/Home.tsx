@@ -46,25 +46,6 @@ function Home() {
       <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 pb-20 pt-10">
         <section className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="flex flex-col gap-6 pt-4">
-            <div className="w-full max-w-md animate-fade-up">
-              <div className="relative h-56 overflow-hidden rounded-3xl border border-white/10 bg-white/5 sm:h-64">
-                <img
-                  src="/assets/hostbot.png"
-                  alt="Hostbot"
-                  className="fade-mask-bottom absolute inset-0 h-full w-full scale-110 object-cover object-top opacity-0 animate-hero-fade [animation-delay:0s]"
-                />
-                <img
-                  src="/assets/josh.png"
-                  alt="Josh character"
-                  className="absolute inset-0 h-full w-full object-contain opacity-0 animate-hero-fade [animation-delay:8s]"
-                />
-                <img
-                  src="/assets/bird-king-kai.png"
-                  alt="Bird on King Kai"
-                  className="absolute inset-0 h-full w-full object-contain opacity-0 animate-hero-fade [animation-delay:16s]"
-                />
-              </div>
-            </div>
             <h1 className="font-display text-xl leading-tight text-[#65da97] animate-fade-up [animation-delay:120ms]">
               Earth's first interactive talk show... in space.
             </h1>
@@ -115,12 +96,17 @@ function Home() {
           <div className="flex flex-col gap-6">
             <Card className="animate-fade-up [animation-delay:200ms]">
               <CardHeader>
-                <CardTitle className="font-display text-lg tracking-[0.2em] text-white/80">
-                  Stream Portal
+                <CardTitle className="font-display text-lg text-white/80">
+                  Broadcast Portal
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
-                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <a
+                  href={TWITCH_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm transition hover:border-white/30 hover:bg-white/10"
+                >
                   <div className="flex items-center gap-3">
                     <img
                       src="/assets/brand-icons/twitch.svg"
@@ -133,35 +119,28 @@ function Home() {
                   <Badge variant={status === "live" ? "live" : "outline"}>
                     {status === "live" ? "LIVE" : "OFFLINE"}
                   </Badge>
-                </div>
-                <Button asChild>
-                  <a href={TWITCH_URL} target="_blank" rel="noreferrer">
-                    <img
-                      src="/assets/brand-icons/twitch.svg"
-                      alt=""
-                      className="h-4 w-4"
-                      aria-hidden="true"
-                    />
-                    Enter the Stream
-                  </a>
-                </Button>
+                </a>
               </CardContent>
             </Card>
 
             <Card className="animate-fade-up [animation-delay:320ms]">
               <CardHeader>
-                <CardTitle className="font-display text-lg tracking-[0.2em] text-white/80">
+                <CardTitle className="font-display text-lg text-white/80">
                   Social Coordinates
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {SOCIAL_LINKS.map((link) => (
+                {SOCIAL_LINKS.map((link, index) => {
+                  const actions = ["CHAT", "WATCH", "SWIPE", "UNC", "TROLL"]
+                  const action = actions[index] ?? "OPEN"
+
+                  return (
                   <a
                     key={link.label}
                     href={link.href}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm transition hover:border-white/30 hover:bg-white/10"
+                    className="flex min-h-12 items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm transition hover:border-white/30 hover:bg-white/10"
                   >
                     <div className="flex items-center gap-3">
                       <img
@@ -173,22 +152,23 @@ function Home() {
                       <p className="font-semibold text-white/90">{link.label}</p>
                     </div>
                     <span className="text-xs uppercase tracking-[0.2em] text-white/50">
-                      Open
+                      {action}
                     </span>
                   </a>
-                ))}
+                  )
+                })}
               </CardContent>
             </Card>
             <Card className="animate-fade-up [animation-delay:440ms]">
               <CardHeader>
-                <CardTitle className="font-display text-lg tracking-[0.2em] text-white/80">
+                <CardTitle className="font-display text-lg text-white/80">
                   Work With Us
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-white/90">
                 <a
                   href={`mailto:${CONTACT_EMAIL}`}
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm transition hover:border-white/30 hover:bg-white/10"
+                  className="flex min-h-12 items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm transition hover:border-white/30 hover:bg-white/10"
                 >
                   <div className="flex items-center gap-3">
                     <img
