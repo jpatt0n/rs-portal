@@ -44,6 +44,10 @@ body {
   font-family: var(--font-body);
 }
 
+body.rs-app #root {
+  width: 100%;
+}
+
 a {
   color: inherit;
   text-decoration: none;

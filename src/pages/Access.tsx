@@ -1,18 +1,16 @@
 import { useEffect } from "react"
-import { Link } from "react-router-dom"
-
-import SpaceBackdrop from "@/components/SpaceBackdrop"
-import { Button } from "@/components/ui/button"
 
 const PROD_SIGNALING_BASE_URL = "https://stream.renderedsenseless.com"
 const LOCAL_SIGNALING_PORT = 55055
 const RENDER_STREAMING_BASE_PATH = "/rs"
+const BODY_CLASS = "rs-app"
 
 declare global {
   interface Window {
     RENDER_STREAMING_CONFIG?: {
       signalingBaseUrl?: string
       basePath?: string
+      iceServers?: RTCIceServer[]
     }
     __lawgivenReceiverModulePromise?: Promise<unknown>
   }
@@ -75,6 +73,10 @@ const ensureScript = (id: string, src: string) =>
 
 function Access() {
   useEffect(() => {
+    const body = document.body
+    body.classList.add(BODY_CLASS)
+    body.dataset.state = "ready"
+
     const existingConfig = window.RENDER_STREAMING_CONFIG || {}
     window.RENDER_STREAMING_CONFIG = {
       signalingBaseUrl: existingConfig.signalingBaseUrl ?? resolveSignalingBaseUrl(),
@@ -104,126 +106,96 @@ function Access() {
     }
 
     void loadReceiver()
+
+    return () => {
+      body.classList.remove(BODY_CLASS)
+      delete body.dataset.state
+    }
   }, [])
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <SpaceBackdrop />
+    <div id="container">
+      <div id="warning" hidden />
 
-      <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-6 pt-8">
-        <div className="text-xs uppercase tracking-[0.3em] text-white/40">
-          Rendered Senseless
-        </div>
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/">Return to Portal</Link>
-        </Button>
-      </header>
+      <div id="player">
+        <div id="overlay">
+          <div id="settingsPanel" className="panel">
+            <div className="panel-header">
+              <div className="panel-title">Join Session</div>
+              <button
+                id="settingsToggle"
+                className="icon-button"
+                type="button"
+                aria-expanded="false"
+                aria-controls="settingsMenu"
+                title="Settings"
+              >
+                <svg
+                  height="512"
+                  viewBox="0 0 32 32"
+                  width="512"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <g>
+                    <path d="m29.21 11.84a3.92 3.92 0 0 1 -3.09-5.3 1.84 1.84 0 0 0 -.55-2.07 14.75 14.75 0 0 0 -4.4-2.55 1.85 1.85 0 0 0 -2.09.58 3.91 3.91 0 0 1 -6.16 0 1.85 1.85 0 0 0 -2.09-.58 14.82 14.82 0 0 0 -4.1 2.3 1.86 1.86 0 0 0 -.58 2.13 3.9 3.9 0 0 1 -3.25 5.36 1.85 1.85 0 0 0 -1.62 1.49 14.14 14.14 0 0 0 -.28 2.8 14.32 14.32 0 0 0 .19 2.35 1.85 1.85 0 0 0 1.63 1.55 3.9 3.9 0 0 1 3.18 5.51 1.82 1.82 0 0 0 .51 2.18 14.86 14.86 0 0 0 4.36 2.51 2 2 0 0 0 .63.11 1.84 1.84 0 0 0 1.5-.78 3.87 3.87 0 0 1 3.2-1.68 3.92 3.92 0 0 1 3.14 1.58 1.84 1.84 0 0 0 2.16.61 15 15 0 0 0 4-2.39 1.85 1.85 0 0 0 .54-2.11 3.9 3.9 0 0 1 3.13-5.39 1.85 1.85 0 0 0 1.57-1.52 14.5 14.5 0 0 0 .26-2.53 14.35 14.35 0 0 0 -.25-2.67 1.83 1.83 0 0 0 -1.54-1.49zm-8.21 4.16a5 5 0 1 1 -5-5 5 5 0 0 1 5 5z" />
+                  </g>
+                </svg>
+              </button>
+            </div>
 
-      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-20 pt-16">
-        <div className="max-w-2xl">
-          <h1 className="font-display text-2xl text-[#65da97]">
-            Access Portal
-          </h1>
-          <p className="mt-4 text-base text-white/90">
-            Connect directly to the live RenderStreaming session. Enter your
-            guest name, choose mic settings, and hit play to join the scene.
-          </p>
-        </div>
+            <div className="field">
+              <label htmlFor="usernameInput">Username</label>
+              <input id="usernameInput" autoComplete="off" placeholder="guest" />
+            </div>
 
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          <div className="flex flex-col gap-4">
-            <div
-              id="warning"
-              hidden
-              className="rounded-2xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100"
-            />
-            <div
-              id="player"
-              className="overflow-hidden rounded-3xl border border-white/10 bg-black/70 shadow-[0_0_40px_rgba(0,0,0,0.35)]"
-            />
-            <div
-              id="message"
-              className="rounded-2xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white/80"
-            />
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-black/50 p-6 text-white/80">
-            <div className="flex flex-col gap-4">
-              <div className="box">
-                <label className="text-xs uppercase tracking-[0.2em] text-white/50">
-                  Codec Preferences
+            <div className="field">
+              <label>Microphone</label>
+              <div className="mic-row">
+                <label className="toggle">
+                  <input type="checkbox" id="micCheck" autoComplete="off" defaultChecked />
+                  <span id="micStateLabel">Enabled</span>
                 </label>
+                <select id="audioSource" autoComplete="off" />
+              </div>
+            </div>
+
+            <button id="joinButton" type="button">Join</button>
+
+            <div id="settingsMenu" className="settings-menu" hidden>
+              <div className="field compact">
+                <label htmlFor="codecPreferences">Codec preferences</label>
                 <select
                   id="codecPreferences"
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
                   autoComplete="off"
                   disabled
                   defaultValue=""
                 >
-                  <option value="">
-                    Default
-                  </option>
+                  <option value="">Default</option>
                 </select>
               </div>
-
-              <div className="box">
-                <label className="text-xs uppercase tracking-[0.2em] text-white/50">
-                  Lock Cursor to Player
-                </label>
-                <div className="mt-2 flex items-center gap-2 text-sm text-white">
-                  <input
-                    type="checkbox"
-                    id="lockMouseCheck"
-                    className="h-4 w-4 accent-[#65da97]"
-                    autoComplete="off"
-                  />
-                  <span>Enable pointer lock</span>
-                </div>
-              </div>
-
-              <div className="box">
-                <label className="text-xs uppercase tracking-[0.2em] text-white/50">
-                  Username
-                </label>
-                <input
-                  id="usernameInput"
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
-                  autoComplete="off"
-                  placeholder="guest"
-                />
-              </div>
-
-              <div className="box">
-                <label className="text-xs uppercase tracking-[0.2em] text-white/50">
-                  Mic Settings
-                </label>
-                <div className="mt-2 flex items-center gap-2 text-sm text-white">
-                  <input
-                    type="checkbox"
-                    id="micCheck"
-                    className="h-4 w-4 accent-[#65da97]"
-                    autoComplete="off"
-                  />
-                  <span>Send microphone audio</span>
-                </div>
-                <label className="mt-3 text-xs uppercase tracking-[0.2em] text-white/50">
-                  Mic Device
-                </label>
-                <select
-                  id="audioSource"
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
-                  autoComplete="off"
-                />
-              </div>
-
-              <p className="text-xs text-white/60">
-                If the stream does not appear, check that the signaling server is
-                running and that your browser allows microphone access.
-              </p>
+              <label className="checkbox-row">
+                <input type="checkbox" id="lockMouseCheck" autoComplete="off" />
+                <span>Lock cursor to player</span>
+              </label>
             </div>
           </div>
-        </section>
-      </main>
+
+          <div id="statusMessage" className="status toast" aria-live="polite" hidden />
+
+          <button id="statsToggle" className="ghost-button" type="button" aria-expanded="false" hidden>
+            Stats
+          </button>
+          <div id="statsPanel" className="stats-panel" hidden>
+            <div id="message" />
+          </div>
+
+          <button id="disconnectButton" className="ghost-button disconnect" type="button" hidden>
+            Disconnect
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
