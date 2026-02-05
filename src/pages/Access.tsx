@@ -11,6 +11,15 @@ declare global {
       signalingBaseUrl?: string
       basePath?: string
       iceServers?: RTCIceServer[]
+      krisp?: {
+        enabled?: boolean
+        basePath?: string
+        models?: {
+          modelNC?: string | { url: string; preload?: boolean }
+          model8?: string | { url: string; preload?: boolean }
+        }
+        preload?: boolean
+      }
     }
     __lawgivenReceiverModulePromise?: Promise<unknown>
   }
@@ -78,9 +87,21 @@ function Access() {
     body.dataset.state = "ready"
 
     const existingConfig = window.RENDER_STREAMING_CONFIG || {}
+    const existingKrisp = existingConfig.krisp || {}
+    const krispBasePath = existingKrisp.basePath ?? `${RENDER_STREAMING_BASE_PATH}/krisp`
+    const defaultKrispModels = {
+      modelNC: `${krispBasePath}/dist/models/model_nc.kef`,
+      model8: `${krispBasePath}/dist/models/model_8.kef`,
+    }
     window.RENDER_STREAMING_CONFIG = {
       signalingBaseUrl: existingConfig.signalingBaseUrl ?? resolveSignalingBaseUrl(),
       basePath: existingConfig.basePath ?? RENDER_STREAMING_BASE_PATH,
+      krisp: {
+        enabled: existingKrisp.enabled ?? true,
+        basePath: krispBasePath,
+        models: { ...defaultKrispModels, ...(existingKrisp.models ?? {}) },
+        preload: existingKrisp.preload ?? false,
+      },
     }
 
     ensureStylesheet("renderstreaming-main-css", `${RENDER_STREAMING_BASE_PATH}/css/main.css`)
@@ -158,6 +179,16 @@ function Access() {
                   <span id="micStateLabel">Enabled</span>
                 </label>
                 <select id="audioSource" autoComplete="off" />
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Noise Reduction</label>
+              <div className="mic-row">
+                <label className="toggle">
+                  <input type="checkbox" id="krispCheck" autoComplete="off" defaultChecked />
+                  <span id="krispStateLabel">Enabled</span>
+                </label>
               </div>
             </div>
 
