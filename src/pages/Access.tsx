@@ -161,6 +161,29 @@ function Access() {
               </div>
             </div>
 
+            <div className="section-header">INTERVIEW</div>
+            <label className="checkbox-row">
+              <input type="checkbox" id="interviewCheck" autoComplete="off" />
+              <span>Join in Interview Mode</span>
+            </label>
+
+            <div id="interviewWebcamSection" className="field interview-section" hidden>
+              <label>Webcam</label>
+              <div className="mic-row">
+                <label className="toggle">
+                  <input type="checkbox" id="webcamCheck" autoComplete="off" />
+                  <span id="webcamStateLabel">Disabled</span>
+                </label>
+                <select id="videoSource" autoComplete="off" />
+              </div>
+              <div className="webcam-preview" aria-live="polite">
+                <video id="webcamPreview" muted playsInline />
+                <div id="webcamPreviewPlaceholder" className="webcam-preview__placeholder">
+                  Webcam preview is off
+                </div>
+              </div>
+            </div>
+
             <button id="joinButton" type="button">Join</button>
 
             <div id="settingsMenu" className="settings-menu" hidden>
@@ -194,6 +217,41 @@ function Access() {
           <button id="disconnectButton" className="ghost-button disconnect" type="button" hidden>
             Disconnect
           </button>
+
+          <div id="interviewDock" className="interview-dock" hidden>
+            <button id="dockMicToggle" className="dock-button" type="button" aria-pressed="true">
+              <span className="dock-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V22h2v-3.08A7 7 0 0 0 19 12Z" />
+                </svg>
+              </span>
+              <span className="dock-label">Mic</span>
+            </button>
+            <button id="dockCamToggle" className="dock-button" type="button" aria-pressed="false">
+              <span className="dock-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M17 7a2 2 0 0 1 2 2v.5l3-2.25v9.5L19 14.5V15a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h12Z" />
+                </svg>
+              </span>
+              <span className="dock-label">Cam</span>
+            </button>
+            <button id="dockDisconnect" className="dock-button dock-danger" type="button">
+              <span className="dock-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M16 7h-2v2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2v2h2a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4ZM4 12l4-4v3h6v2H8v3l-4-4Z" />
+                </svg>
+              </span>
+              <span className="dock-label">Disconnect</span>
+            </button>
+            <button id="dockExitInterview" className="dock-button" type="button">
+              <span className="dock-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M14 7v2h4v10H8v-4H6v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-4ZM3 12l4 4v-3h7v-2H7V8l-4 4Z" />
+                </svg>
+              </span>
+              <span className="dock-label">Exit Interview</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
