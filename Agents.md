@@ -13,7 +13,7 @@
 - `DEPLOYMENT.md` — cPanel build + SPA rewrite instructions.
 
 ## RenderStreaming integration
-- `Access.tsx` injects `window.RENDER_STREAMING_CONFIG` with `signalingBaseUrl` + `basePath` (`/rs`).
+- `Access.tsx` injects `window.RENDER_STREAMING_CONFIG` with `signalingBaseUrl` + `basePath` (`/rs`) and RNNoise defaults for receiver mic denoising.
 - Signaling base URL defaults to `https://stream.renderedsenseless.com` on production hostnames, `http://localhost:55055` on local dev.
 - The page loads `/rs/css/main.css`, `/rs/receiver/css/style.css`, and dynamically imports `/rs/receiver/js/main.js`.
 - The receiver expects specific DOM IDs (`#player`, `#warning`, `#message`, `#usernameInput`, `#micCheck`, etc.) which are rendered in `Access.tsx`.

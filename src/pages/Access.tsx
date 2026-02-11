@@ -11,6 +11,14 @@ declare global {
       signalingBaseUrl?: string
       basePath?: string
       iceServers?: RTCIceServer[]
+      rnnoise?: {
+        enabled?: boolean
+        preferSimd?: boolean
+        maxChannels?: number
+        workletPath?: string
+        wasmPath?: string
+        simdWasmPath?: string
+      }
     }
     __lawgivenReceiverModulePromise?: Promise<unknown>
   }
@@ -81,6 +89,13 @@ function Access() {
     window.RENDER_STREAMING_CONFIG = {
       signalingBaseUrl: existingConfig.signalingBaseUrl ?? resolveSignalingBaseUrl(),
       basePath: existingConfig.basePath ?? RENDER_STREAMING_BASE_PATH,
+      iceServers: existingConfig.iceServers,
+      rnnoise: {
+        enabled: true,
+        preferSimd: true,
+        maxChannels: 1,
+        ...existingConfig.rnnoise,
+      },
     }
 
     ensureStylesheet("renderstreaming-main-css", `${RENDER_STREAMING_BASE_PATH}/css/main.css`)
