@@ -17,6 +17,14 @@ and direct links resolve to `index.html`.
 
 Create an `.htaccess` file in the same folder as `index.html`:
 ```
+<IfModule mod_headers.c>
+  # Keep RenderStreaming assets fresh to avoid mixed old/new JS module caches.
+  SetEnvIf Request_URI "^/rs/" RS_ASSET=1
+  Header always set Cache-Control "no-store, no-cache, must-revalidate" env=RS_ASSET
+  Header always set Pragma "no-cache" env=RS_ASSET
+  Header always set Expires "0" env=RS_ASSET
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
