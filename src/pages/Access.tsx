@@ -79,6 +79,31 @@ const ensureScript = (id: string, src: string) =>
     document.body.appendChild(script)
   })
 
+const isEditableTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  if (target.isContentEditable) {
+    return true
+  }
+
+  const tagName = target.tagName
+  return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT"
+}
+
+const isCloseTabShortcut = (event: KeyboardEvent) => {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+    return false
+  }
+
+  if (event.code === "KeyW") {
+    return true
+  }
+
+  return typeof event.key === "string" && event.key.toLowerCase() === "w"
+}
+
 function Access() {
   useEffect(() => {
     const body = document.body
@@ -122,9 +147,28 @@ function Access() {
 
     void loadReceiver()
 
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (document.body.dataset.state !== "connected") {
+        return
+      }
+
+      if (isEditableTarget(event.target) || !isCloseTabShortcut(event)) {
+        return
+      }
+
+      if (event.cancelable) {
+        event.preventDefault()
+      }
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+    }
+
+    window.addEventListener("keydown", onWindowKeyDown, true)
+
     return () => {
       body.classList.remove(BODY_CLASS)
       delete body.dataset.state
+      window.removeEventListener("keydown", onWindowKeyDown, true)
     }
   }, [])
 
