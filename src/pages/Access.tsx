@@ -1,7 +1,5 @@
 import { useEffect } from "react"
 
-import "./access.css"
-
 const PROD_SIGNALING_BASE_URL = "https://stream.renderedsenseless.com"
 const LOCAL_SIGNALING_PORT = 55055
 const RENDER_STREAMING_BASE_PATH = "/rs"
@@ -112,13 +110,6 @@ function Access() {
     body.classList.add(BODY_CLASS)
     body.dataset.state = "ready"
 
-    const updateViewportHeight = () => {
-      const viewportHeight = window.visualViewport?.height ?? window.innerHeight
-      body.style.setProperty("--rs-viewport-height", `${Math.round(viewportHeight)}px`)
-    }
-
-    updateViewportHeight()
-
     const existingConfig = window.RENDER_STREAMING_CONFIG || {}
     window.RENDER_STREAMING_CONFIG = {
       signalingBaseUrl: existingConfig.signalingBaseUrl ?? resolveSignalingBaseUrl(),
@@ -173,23 +164,16 @@ function Access() {
     }
 
     window.addEventListener("keydown", onWindowKeyDown, true)
-    window.addEventListener("resize", updateViewportHeight)
-    window.addEventListener("orientationchange", updateViewportHeight)
-    window.visualViewport?.addEventListener("resize", updateViewportHeight)
 
     return () => {
       body.classList.remove(BODY_CLASS)
       delete body.dataset.state
-      body.style.removeProperty("--rs-viewport-height")
       window.removeEventListener("keydown", onWindowKeyDown, true)
-      window.removeEventListener("resize", updateViewportHeight)
-      window.removeEventListener("orientationchange", updateViewportHeight)
-      window.visualViewport?.removeEventListener("resize", updateViewportHeight)
     }
   }, [])
 
   return (
-    <div id="container" className="access-container">
+    <div id="container">
       <div id="warning" hidden />
 
       <div id="player">
