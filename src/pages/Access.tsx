@@ -183,7 +183,6 @@ function Access() {
               <div className="panel-heading">
                 <div className="panel-kicker">Rendered Senseless</div>
                 <div className="panel-title">Join Session</div>
-                <p className="panel-copy">Enter a username, then enable mic or webcam if you need them.</p>
               </div>
               <button
                 id="settingsToggle"
