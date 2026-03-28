@@ -1,0 +1,227 @@
+body.rs-app[data-state] {
+  --rs-page-padding-top: max(12px, env(safe-area-inset-top));
+  --rs-page-padding-right: max(12px, env(safe-area-inset-right));
+  --rs-page-padding-bottom: max(12px, env(safe-area-inset-bottom));
+  --rs-page-padding-left: max(12px, env(safe-area-inset-left));
+  --rs-page-viewport-height: var(--rs-viewport-height, 100dvh);
+  min-height: var(--rs-page-viewport-height);
+  padding:
+    var(--rs-page-padding-top)
+    var(--rs-page-padding-right)
+    var(--rs-page-padding-bottom)
+    var(--rs-page-padding-left);
+}
+
+body.rs-app[data-state] #root {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: calc(
+    var(--rs-page-viewport-height) - var(--rs-page-padding-top) - var(--rs-page-padding-bottom)
+  );
+}
+
+body.rs-app #container.access-container {
+  width: min(
+    100%,
+    calc(
+      (
+        var(--rs-page-viewport-height) - var(--rs-page-padding-top) - var(--rs-page-padding-bottom)
+      ) * 16 / 9
+    )
+  );
+  max-width: min(100%, 1400px);
+}
+
+body.rs-app[data-state] #player {
+  min-height: 240px;
+  border-radius: 20px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
+}
+
+body.rs-app #Video {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+body.rs-app #overlay {
+  padding: 18px;
+}
+
+body.rs-app #overlay .panel {
+  max-height: calc(var(--rs-page-viewport-height) - 96px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+body.rs-app #overlay .status.toast {
+  max-width: min(360px, calc(100% - 36px));
+}
+
+body.rs-app #overlay .stats-panel {
+  max-width: min(360px, calc(100% - 36px));
+}
+
+body.rs-app #overlay .field input,
+body.rs-app #overlay .field select,
+body.rs-app #overlay #joinButton {
+  font-size: 16px;
+}
+
+@media screen and (max-width: 900px), screen and (max-height: 820px) {
+  body.rs-app[data-state] {
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  body.rs-app #container.access-container {
+    width: 100%;
+    max-width: none;
+  }
+
+  body.rs-app[data-state] #player {
+    height: 72vh;
+    max-height: calc(
+      var(--rs-page-viewport-height) - var(--rs-page-padding-top) - var(--rs-page-padding-bottom)
+    );
+    min-height: 320px;
+    aspect-ratio: auto;
+    border-radius: 16px;
+  }
+
+  body.rs-app[data-state] #player::before {
+    content: none;
+    padding-top: 0;
+  }
+
+  body.rs-app #overlay {
+    padding: 12px;
+  }
+
+  body.rs-app #overlay .panel {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    transform: none;
+    width: auto;
+    max-height: min(52vh, 420px);
+    border-radius: 16px;
+  }
+
+  body.rs-app #warning {
+    margin: 0 0 12px;
+  }
+
+  body.rs-app[data-state] #fullscreenButton {
+    top: 12px;
+    right: 12px;
+    width: 40px;
+    height: 40px;
+  }
+
+  body.rs-app #overlay .status.toast {
+    top: 12px;
+    right: 12px;
+    left: 88px;
+    max-width: none;
+  }
+
+  body.rs-app #overlay .ghost-button {
+    top: 12px;
+    left: 12px;
+    padding: 8px 11px;
+  }
+
+  body.rs-app #overlay .ghost-button.disconnect {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: auto;
+  }
+
+  body.rs-app #overlay .stats-panel {
+    right: 12px;
+    bottom: 60px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+  }
+}
+
+@media screen and (max-width: 640px) {
+  body.rs-app[data-state] {
+    padding:
+      max(8px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+  }
+
+  body.rs-app[data-state] #player {
+    height: 68vh;
+    max-height: calc(
+      var(--rs-page-viewport-height) - var(--rs-page-padding-top) - var(--rs-page-padding-bottom)
+    );
+    min-height: 280px;
+    border-radius: 14px;
+  }
+
+  body.rs-app #overlay .panel {
+    max-height: min(50vh, 400px);
+    padding: 14px;
+  }
+
+  body.rs-app #overlay .mic-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  body.rs-app #overlay .mic-row select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  body.rs-app #overlay .toggle,
+  body.rs-app #overlay .checkbox-row {
+    justify-content: space-between;
+  }
+
+  body.rs-app #overlay .webcam-preview {
+    height: 120px;
+  }
+
+  body.rs-app #overlay .stats-panel {
+    bottom: 56px;
+    padding: 10px;
+  }
+
+  body.rs-app #overlay .status.toast {
+    left: 76px;
+  }
+
+  body.rs-app[data-state] #message {
+    max-height: 160px;
+  }
+}
+
+@media screen and (max-width: 420px), screen and (max-height: 560px) {
+  body.rs-app[data-state] #player {
+    min-height: 240px;
+  }
+
+  body.rs-app #overlay .panel {
+    max-height: min(54vh, 360px);
+  }
+
+  body.rs-app #overlay .field {
+    margin-top: 10px;
+  }
+
+  body.rs-app #overlay .field input,
+  body.rs-app #overlay .field select {
+    height: 40px;
+  }
+}
