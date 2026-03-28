@@ -180,7 +180,11 @@ function Access() {
         <div id="overlay">
           <div id="settingsPanel" className="panel">
             <div className="panel-header">
-              <div className="panel-title">Join Session</div>
+              <div className="panel-heading">
+                <div className="panel-kicker">Rendered Senseless</div>
+                <div className="panel-title">Join Session</div>
+                <p className="panel-copy">Enter a username, then enable mic or webcam if you need them.</p>
+              </div>
               <button
                 id="settingsToggle"
                 className="icon-button"
