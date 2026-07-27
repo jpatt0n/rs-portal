@@ -1,5 +1,4 @@
 import { type CSSProperties, useEffect, useState } from "react"
-import { Link } from "react-router-dom"
 
 import SpaceBackdrop from "@/components/SpaceBackdrop"
 import { Badge } from "@/components/ui/badge"
@@ -66,12 +65,6 @@ function Home() {
         <div className="text-xs uppercase tracking-[0.3em] text-white/40">
           Rendered Senseless
         </div>
-        <Link
-          to="/access"
-          className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/90 transition hover:border-white/40 hover:text-white"
-        >
-          Guest Access
-        </Link>
       </header>
 
       <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 pb-20 pt-10">

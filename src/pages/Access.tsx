@@ -1,4 +1,5 @@
 import { useEffect } from "react"
+import { Navigate } from "react-router-dom"
 
 const PROD_SIGNALING_BASE_URL = "https://stream.renderedsenseless.com"
 const LOCAL_SIGNALING_PORT = 55055
@@ -11,6 +12,7 @@ declare global {
       signalingBaseUrl?: string
       basePath?: string
       iceServers?: RTCIceServer[]
+      sessionToken?: string
       rnnoise?: {
         enabled?: boolean
         preferSimd?: boolean
@@ -105,7 +107,14 @@ const isCloseTabShortcut = (event: KeyboardEvent) => {
 }
 
 function Access() {
+  const accessParams = new URLSearchParams(window.location.hash.replace(/^#/, ""))
+  const hasPrivateAccessLink = Boolean(accessParams.get("cast") || accessParams.get("guest"))
+
   useEffect(() => {
+    if (!hasPrivateAccessLink) {
+      return
+    }
+
     const body = document.body
     body.classList.add(BODY_CLASS)
     body.dataset.state = "ready"
@@ -115,6 +124,7 @@ function Access() {
       signalingBaseUrl: existingConfig.signalingBaseUrl ?? resolveSignalingBaseUrl(),
       basePath: existingConfig.basePath ?? RENDER_STREAMING_BASE_PATH,
       iceServers: existingConfig.iceServers,
+      sessionToken: existingConfig.sessionToken,
       rnnoise: {
         enabled: true,
         preferSimd: true,
@@ -170,7 +180,11 @@ function Access() {
       delete body.dataset.state
       window.removeEventListener("keydown", onWindowKeyDown, true)
     }
-  }, [])
+  }, [hasPrivateAccessLink])
+
+  if (!hasPrivateAccessLink) {
+    return <Navigate to="/" replace />
+  }
 
   return (
     <div id="container">
