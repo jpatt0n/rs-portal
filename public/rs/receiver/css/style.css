@@ -231,6 +231,24 @@ body {
   filter: brightness(1.05);
 }
 
+body[data-state="waiting"] #joinButton {
+  background: linear-gradient(135deg, #49d17d, #2ea95d);
+  color: #07140c;
+  box-shadow: 0 14px 32px rgba(46, 169, 93, 0.28);
+  cursor: default;
+  opacity: 1;
+}
+
+body[data-state="waiting"] #joinButton:hover {
+  filter: none;
+}
+
+body[data-state="waiting"] .status {
+  color: #bfffd4;
+  background: rgba(10, 45, 24, 0.78);
+  border-color: rgba(73, 209, 125, 0.55);
+}
+
 .icon-button {
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(10, 12, 15, 0.7);
