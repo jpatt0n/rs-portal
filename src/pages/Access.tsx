@@ -277,9 +277,53 @@ function Access() {
 
           <div id="statusMessage" className="status toast" aria-live="polite" hidden />
 
-          <button id="statsToggle" className="ghost-button" type="button" aria-expanded="false" hidden>
-            Stats
-          </button>
+          <div id="connectedTools" className="connected-tools" hidden>
+            <button
+              id="statsToggle"
+              className="ghost-button"
+              type="button"
+              aria-expanded="false"
+              aria-controls="statsPanel"
+            >
+              Stats
+            </button>
+            <button
+              id="inputSettingsToggle"
+              className="connected-icon-button"
+              type="button"
+              aria-expanded="false"
+              aria-controls="inputSettingsPanel"
+              aria-label="Camera controls"
+              title="Camera controls"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58-1.92-3.32-2.39.96a7.1 7.1 0 0 0-1.62-.94L14.87 3h-3.84l-.36 3.18c-.58.24-1.12.55-1.62.94l-2.39-.96-1.92 3.32 2.03 1.58c-.05.3-.08.62-.08.94s.03.64.08.94l-2.03 1.58 1.92 3.32 2.39-.96c.5.39 1.04.7 1.62.94l.36 3.18h3.84l.36-3.18c.58-.24 1.12-.55 1.62-.94l2.39.96 1.92-3.32-2.02-1.58ZM12.95 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" />
+              </svg>
+            </button>
+          </div>
+          <div
+            id="inputSettingsPanel"
+            className="input-settings-panel"
+            aria-labelledby="inputSettingsTitle"
+            hidden
+          >
+            <div id="inputSettingsTitle" className="input-settings-title">Look sensitivity</div>
+            <label htmlFor="mouseSensitivityRange">Right-drag camera speed</label>
+            <div className="sensitivity-control">
+              <input id="mouseSensitivityRange" type="range" min="0.1" max="4" step="0.1" defaultValue="1" />
+              <input
+                id="mouseSensitivityNumber"
+                type="number"
+                min="0.1"
+                max="4"
+                step="0.1"
+                defaultValue="1.0"
+                inputMode="decimal"
+                aria-label="Right-drag camera sensitivity multiplier"
+              />
+            </div>
+            <div className="input-settings-hint">Saved on this browser.</div>
+          </div>
           <div id="statsPanel" className="stats-panel" hidden>
             <div id="message" />
           </div>
