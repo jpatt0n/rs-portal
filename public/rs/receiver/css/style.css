@@ -58,7 +58,6 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 2;
-  padding: clamp(14px, 2vw, 24px);
 }
 
 #Video {
@@ -98,82 +97,53 @@ body {
   left: 50%;
   transform: translate(-50%, -50%);
   margin: 0;
-  padding: 22px;
-  width: min(420px, calc(100% - 48px));
-  max-height: calc(100% - 48px);
-  overflow: auto;
-  background: linear-gradient(180deg, rgba(15, 18, 24, 0.9), rgba(8, 10, 14, 0.84));
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
-  backdrop-filter: blur(14px);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  padding: 16px;
+  width: min(340px, calc(100% - 32px));
+  background: rgba(14, 16, 20, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  backdrop-filter: blur(10px);
   color: #f5f5f5;
 }
 
 .panel-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 14px;
-}
-
-.panel-heading {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.panel-kicker {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(116, 188, 255, 0.9);
 }
 
 .panel-title {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.1;
-}
-
-.panel-copy {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
-  color: rgba(255, 255, 255, 0.68);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .field {
-  margin-top: 14px;
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .field.compact {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .field label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   color: rgba(255, 255, 255, 0.7);
 }
 
 .field input,
 .field select {
-  height: 42px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(7, 8, 10, 0.92);
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(7, 8, 10, 0.8);
   color: #f5f5f5;
-  padding: 0 12px;
-  font-size: 14px;
+  padding: 0 10px;
 }
 
 .field select {
@@ -186,13 +156,13 @@ body {
 
 .mic-row {
   display: flex;
-  gap: 12px;
-  align-items: stretch;
+  gap: 10px;
+  align-items: center;
   flex-wrap: wrap;
 }
 
 .mic-row select {
-  flex: 1 1 200px;
+  flex: 1 1 160px;
   min-width: 160px;
 }
 
@@ -200,12 +170,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 42px;
-  padding: 0 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 14px;
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.8);
 }
 
@@ -214,17 +179,15 @@ body {
 }
 
 #joinButton {
-  margin-top: 18px;
+  margin-top: 14px;
   width: 100%;
-  height: 46px;
-  border-radius: 14px;
+  height: 40px;
+  border-radius: 10px;
   border: none;
-  background: linear-gradient(135deg, #6ec2ff, #4aa3ff);
-  color: #071018;
-  font-size: 15px;
-  font-weight: 700;
+  background: #4aa3ff;
+  color: #0b0b0b;
+  font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 14px 32px rgba(74, 163, 255, 0.28);
 }
 
 #joinButton:hover {
@@ -234,7 +197,6 @@ body {
 body[data-state="waiting"] #joinButton {
   background: linear-gradient(135deg, #49d17d, #2ea95d);
   color: #07140c;
-  box-shadow: 0 14px 32px rgba(46, 169, 93, 0.28);
   cursor: default;
   opacity: 1;
 }
@@ -252,15 +214,14 @@ body[data-state="waiting"] .status {
 .icon-button {
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(10, 12, 15, 0.7);
-  border-radius: 12px;
-  width: 40px;
-  height: 40px;
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  flex: 0 0 auto;
 }
 
 .icon-button svg {
@@ -270,12 +231,12 @@ body[data-state="waiting"] .status {
 }
 
 .settings-menu {
-  margin-top: 16px;
-  padding-top: 14px;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .settings-menu[hidden] {
@@ -286,9 +247,7 @@ body[data-state="waiting"] .status {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 42px;
-  padding: 0 2px;
-  font-size: 14px;
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.8);
 }
 
@@ -298,10 +257,10 @@ body[data-state="waiting"] .status {
 
 .webcam-preview {
   position: relative;
-  margin-top: 12px;
+  margin-top: 10px;
   width: 100%;
-  height: 164px;
-  border-radius: 14px;
+  height: 140px;
+  border-radius: 10px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(7, 8, 10, 0.8);
@@ -345,8 +304,8 @@ body[data-state="waiting"] .status {
 .status.toast {
   pointer-events: auto;
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: 18px;
+  right: 18px;
   margin-top: 0;
   max-width: 320px;
   z-index: 4;
@@ -355,16 +314,16 @@ body[data-state="waiting"] .status {
 .ghost-button {
   pointer-events: auto;
   position: absolute;
-  top: 20px;
-  left: 20px;
+  top: 18px;
+  left: 18px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(10, 12, 15, 0.5);
   color: rgba(255, 255, 255, 0.8);
-  padding: 8px 13px;
+  padding: 6px 12px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   cursor: pointer;
   backdrop-filter: blur(6px);
 }
@@ -387,6 +346,26 @@ body[data-state="waiting"] .status {
 
 .connected-tools .ghost-button {
   position: static;
+}
+
+.webcam-mode-controls {
+  pointer-events: auto;
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 4;
+}
+
+.webcam-mode-controls .ghost-button {
+  position: static;
+}
+
+.webcam-mode-controls .ghost-button:disabled {
+  cursor: wait;
+  opacity: 0.5;
 }
 
 .connected-icon-button {
@@ -485,9 +464,9 @@ body[data-state="waiting"] .status {
 
 .ghost-button.disconnect {
   top: auto;
-  bottom: 20px;
+  bottom: 18px;
   left: auto;
-  right: 20px;
+  right: 18px;
   opacity: 0.65;
 }
 
@@ -498,10 +477,10 @@ body[data-state="waiting"] .status {
 .stats-panel {
   pointer-events: auto;
   position: absolute;
-  bottom: 20px;
-  left: 20px;
-  width: 380px;
-  max-width: min(380px, calc(100vw - 40px));
+  bottom: 66px;
+  left: 18px;
+  width: 340px;
+  max-width: calc(100vw - 36px);
   background: rgba(10, 12, 15, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
@@ -519,96 +498,19 @@ body[data-state="waiting"] .status {
 #connectedTools[hidden],
 #inputSettingsPanel[hidden],
 #statsPanel[hidden],
+#webcamModeControls[hidden],
 #disconnectButton[hidden] {
   display: none;
 }
 
 @media screen and (max-width: 700px) {
-  #player {
-    min-height: 100dvh;
-    aspect-ratio: auto;
-  }
-
-  #player::before {
-    content: none;
-    padding-top: 0;
-  }
-
-  #overlay {
-    padding: 0;
-  }
-
   .panel {
-    inset: 0;
-    top: 0;
-    left: 0;
-    transform: none;
-    width: 100%;
-    max-height: none;
-    min-height: 100%;
-    padding: 20px 18px 24px;
-    border-radius: 0;
-    border-left: 0;
-    border-right: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .panel-header {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    margin: -20px -18px 0;
-    padding: 20px 18px 16px;
-    background: linear-gradient(180deg, rgba(12, 15, 21, 0.98), rgba(12, 15, 21, 0.88));
-    backdrop-filter: blur(14px);
-  }
-
-  .panel-title {
-    font-size: 28px;
-  }
-
-  .panel-copy {
-    max-width: 28ch;
-  }
-
-  .field {
-    margin-top: 16px;
-  }
-
-  .field input,
-  .field select,
-  .toggle,
-  .checkbox-row {
-    min-height: 48px;
-    font-size: 15px;
-  }
-
-  .mic-row select {
-    min-width: 100%;
-    flex-basis: 100%;
-  }
-
-  .toggle {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .webcam-preview {
-    height: min(30vh, 220px);
-  }
-
-  #joinButton {
-    position: sticky;
-    bottom: 0;
-    margin-top: 20px;
-    height: 52px;
+    width: calc(100% - 28px);
   }
 
   .ghost-button {
     top: 12px;
     left: 12px;
-    z-index: 3;
   }
 
   .connected-tools {
@@ -627,19 +529,17 @@ body[data-state="waiting"] .status {
     right: 12px;
   }
 
-  .status.toast {
-    top: auto;
-    right: 12px;
-    bottom: 72px;
+  .webcam-mode-controls {
     left: 12px;
-    max-width: none;
+    bottom: 12px;
+    max-width: calc(100vw - 96px);
+    flex-wrap: wrap;
   }
 
   .stats-panel {
-    bottom: 12px;
+    bottom: 72px;
     left: 12px;
     right: 12px;
-    width: auto;
     max-width: none;
   }
 }

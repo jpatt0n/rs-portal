@@ -301,6 +301,14 @@ function Access() {
               </svg>
             </button>
           </div>
+          <div id="webcamModeControls" className="webcam-mode-controls" hidden>
+            <button id="webcamPrimaryMode" className="ghost-button" type="button">
+              Enter TV Man
+            </button>
+            <button id="webcamSecondaryMode" className="ghost-button" type="button">
+              Enter Full Control
+            </button>
+          </div>
           <div
             id="inputSettingsPanel"
             className="input-settings-panel"
