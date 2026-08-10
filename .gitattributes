@@ -1,0 +1,4 @@
+# Shell scripts must keep LF endings. With core.autocrlf=true on Windows they
+# would otherwise check out as CRLF, and Linux/CI fails on the shebang with
+# "bad interpreter: /usr/bin/env bash^M".
+*.sh text eol=lf
