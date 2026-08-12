@@ -268,10 +268,11 @@ export class VideoPlayer {
       'KeyW', 'KeyA', 'KeyS', 'KeyD',
       'ControlLeft', 'ControlRight',
       'ShiftLeft', 'ShiftRight', 'Space',
-      // Alt + 1-4 are the application's quickcam chords. Alt is not a browser shortcut modifier, but
-      // the digits are locked anyway so that whichever modifier reaches the page - and Ctrl+1-8 is
-      // tab switching - the chord lands on the application rather than on the browser.
-      'AltLeft', 'AltRight',
+      // The application's quickcam keys: F1-F4, and the same four as Ctrl + digit. Cancelling the
+      // keydown already handles Chrome, but locking them is what stops the browser acting on them
+      // at all - the only thing that works in browsers which reserve tab switching.
+      // Alt is deliberately not locked: capturing it in fullscreen would also swallow Alt+Tab.
+      'F1', 'F2', 'F3', 'F4',
       'Digit1', 'Digit2', 'Digit3', 'Digit4',
       'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4'
     ]);
