@@ -41,6 +41,8 @@ export class Sender extends LocalInputManager {
     this._pressedKeys = new Set();
     this._altAsControlFallback = false;
     this._mouseSensitivity = 1;
+    this._handheldMirror = false;
+    this._handheldOwnedPointerLock = false;
     this._corrector = new PointerCorrector(
       this._elem.videoWidth,
       this._elem.videoHeight,
@@ -56,6 +58,8 @@ export class Sender extends LocalInputManager {
     this._onWindowBlurHandler = this._onWindowBlur.bind(this);
     this._onPageHideHandler = this._onPageHide.bind(this);
     this._onVisibilityChangeHandler = this._onVisibilityChange.bind(this);
+    this._onPointerLockChangeHandler = this._onPointerLockChange.bind(this);
+    document.addEventListener('pointerlockchange', this._onPointerLockChangeHandler, false);
 
     //since line 27 cannot complete resize initialization but can only monitor div dimension changes, line 26 needs to be reserved
     this._elem.addEventListener('resize', this._onResizeEventHandler, false);
@@ -214,6 +218,7 @@ export class Sender extends LocalInputManager {
         this._pressedKeys.add(code);
         this.keyboard.queueEvent({ type: 'keydown', code: code });
         this._queueStateEvent(this.keyboard.currentState, this.keyboard);
+        this._updateHandheldMirror(event);
         if (!this._loggedKeyEvent) {
           this._loggedKeyEvent = true;
         }
@@ -253,6 +258,85 @@ export class Sender extends LocalInputManager {
       return false;
     }
     return event.ctrlKey || event.metaKey || (this._altAsControlFallback && event.altKey);
+  }
+
+  /**
+   * The application's handheld camera (F4 / Ctrl+4, Esc to exit) pans on bare mouse movement, so
+   * while it is up the OS cursor must not exist to run into a window edge and stall the pan. Only
+   * the page can reach the Pointer Lock API, so the handheld's own keys are mirrored here and the
+   * lock follows them. The mirror can drift if the application drops the handheld on its own (a
+   * cut from another client, a mode change); Esc or F4 puts both sides right.
+   */
+  _updateHandheldMirror(event) {
+    if (this._isHandheldToggleChord(event)) {
+      if (this._handheldMirror) {
+        this._releaseHandheldPointerLock();
+      } else {
+        this._captureHandheldPointerLock();
+      }
+      return;
+    }
+    if (event.code === 'Escape' && this._handheldMirror) {
+      this._releaseHandheldPointerLock();
+    }
+  }
+
+  _isHandheldToggleChord(event) {
+    if (event.code === 'F4') {
+      return true;
+    }
+    return (event.code === 'Digit4' || event.code === 'Numpad4') && this._isAppClaimedChord(event);
+  }
+
+  _captureHandheldPointerLock() {
+    this._handheldMirror = true;
+    if (document.pointerLockElement) {
+      // Someone else's lock (the fullscreen lock-mouse option) is already holding the cursor.
+      // Riding it rather than owning it means lowering the handheld will not tear it down.
+      this._handheldOwnedPointerLock = false;
+      return;
+    }
+    if (!this._elem.requestPointerLock) {
+      return;
+    }
+    this._handheldOwnedPointerLock = true;
+    const request = this._elem.requestPointerLock();
+    if (request && request.catch) {
+      request.catch(() => { this._handheldOwnedPointerLock = false; });
+    }
+  }
+
+  _releaseHandheldPointerLock() {
+    this._handheldMirror = false;
+    if (this._handheldOwnedPointerLock &&
+        document.pointerLockElement === this._elem &&
+        document.exitPointerLock) {
+      document.exitPointerLock();
+    }
+    this._handheldOwnedPointerLock = false;
+  }
+
+  _onPointerLockChange() {
+    if (!this._handheldMirror || document.pointerLockElement) {
+      return;
+    }
+    // The lock fell away without any exit key being seen: the browser swallows the Esc that ends a
+    // pointer lock, and Alt+Tab never reaches the page at all. The application still has the
+    // handheld up, so the Esc it never received is forwarded by hand - one press lowers the
+    // camera in both worlds.
+    this._handheldMirror = false;
+    this._handheldOwnedPointerLock = false;
+    this._sendKeyTap('Escape');
+  }
+
+  _sendKeyTap(code) {
+    if (!this.keyboard) {
+      return;
+    }
+    this.keyboard.queueEvent({ type: 'keydown', code: code });
+    this._queueStateEvent(this.keyboard.currentState, this.keyboard);
+    this.keyboard.queueEvent({ type: 'keyup', code: code });
+    this._queueStateEvent(this.keyboard.currentState, this.keyboard);
   }
 
   _resolveKeyCode(event) {
@@ -369,6 +453,8 @@ export class Sender extends LocalInputManager {
 
   dispose() {
     this.releaseAllInputs();
+    this._releaseHandheldPointerLock();
+    document.removeEventListener('pointerlockchange', this._onPointerLockChangeHandler, false);
     this._elem.removeEventListener('resize', this._onResizeEventHandler, false);
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
