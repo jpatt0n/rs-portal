@@ -267,7 +267,13 @@ export class VideoPlayer {
     this._keyboardLockRequest = navigator.keyboard.lock([
       'KeyW', 'KeyA', 'KeyS', 'KeyD',
       'ControlLeft', 'ControlRight',
-      'ShiftLeft', 'ShiftRight', 'Space'
+      'ShiftLeft', 'ShiftRight', 'Space',
+      // Alt + 1-4 are the application's quickcam chords. Alt is not a browser shortcut modifier, but
+      // the digits are locked anyway so that whichever modifier reaches the page - and Ctrl+1-8 is
+      // tab switching - the chord lands on the application rather than on the browser.
+      'AltLeft', 'AltRight',
+      'Digit1', 'Digit2', 'Digit3', 'Digit4',
+      'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4'
     ]);
     this._keyboardLockRequest.catch(() => { });
   }

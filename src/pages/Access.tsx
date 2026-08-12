@@ -309,7 +309,7 @@ function Access() {
           >
             <div id="inputSettingsTitle" className="input-settings-title">Settings</div>
             <div className="input-settings-section">
-              <label htmlFor="mouseSensitivityRange">Right-drag camera speed</label>
+              <label htmlFor="mouseSensitivityRange">Camera speed</label>
               <div className="sensitivity-control">
                 <input id="mouseSensitivityRange" type="range" min="0.1" max="4" step="0.1" defaultValue="1" />
                 <input
@@ -320,7 +320,7 @@ function Access() {
                   step="0.1"
                   defaultValue="1.0"
                   inputMode="decimal"
-                  aria-label="Right-drag camera sensitivity multiplier"
+                  aria-label="Camera speed multiplier"
                 />
               </div>
               <div className="input-settings-hint">Saved on this browser.</div>

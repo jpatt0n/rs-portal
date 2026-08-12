@@ -11,6 +11,22 @@ import { LocalInputManager } from "./inputremoting.js";
 import { GamepadHandler } from "./gamepadhandler.js";
 import { PointerCorrector } from "./pointercorrect.js";
 
+/**
+ * Digits the streamed application claims when a modifier is held - its quickcam chords, which it
+ * reads as Alt + digit.
+ *
+ * Chrome maps Ctrl+1..8 to "switch to tab N", but unlike Ctrl+T or Ctrl+W those are not reserved:
+ * the page sees the keydown first and cancelling it keeps the tab. Firefox and Safari do reserve
+ * theirs, so there the chord only lands while the player is fullscreen and the Keyboard Lock API
+ * (see videoplayer.js) is holding these codes.
+ */
+const APP_CLAIMED_MODIFIER_DIGITS = new Set([
+  'Digit1', 'Digit2', 'Digit3', 'Digit4',
+  'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4'
+]);
+
+const CONTROL_CODES = ['ControlLeft', 'ControlRight'];
+
 export class Sender extends LocalInputManager {
   constructor(elem) {
     super();
@@ -20,6 +36,7 @@ export class Sender extends LocalInputManager {
     this._loggedKeyEvent = false;
     this._pressedKeys = new Set();
     this._altAsControlFallback = false;
+    this._altPromoted = false;
     this._mouseSensitivity = 1;
     this._corrector = new PointerCorrector(
       this._elem.videoWidth,
@@ -163,7 +180,10 @@ export class Sender extends LocalInputManager {
       this._loggedMouseEvent = true;
     }
     this.mouse.queueEvent(event);
-    if (event.type === 'mousemove' && (event.buttons & 2) !== 0) {
+    // Every mouse delta is scaled, not just right-drag ones. Delta is only ever read as camera
+    // movement, and the application now has camera modes - the handheld camera above all - that pan
+    // without a button held; those have to answer the same speed setting as a right-drag does.
+    if (event.type === 'mousemove') {
       this.mouse.currentState.delta = this.mouse.currentState.delta.map(
         value => value * this._mouseSensitivity
       );
@@ -180,6 +200,17 @@ export class Sender extends LocalInputManager {
     if (!code) {
       return;
     }
+    const isAppClaimedChord = this._isAppClaimedChord(event);
+    if (isAppClaimedChord) {
+      // Held back from the browser so the chord reaches the application rather than switching tabs.
+      event.preventDefault();
+      if (event.type === 'keydown') {
+        this._promoteAltModifier();
+      }
+    }
+    else if (event.type === 'keyup' && (event.code === 'AltLeft' || event.code === 'AltRight')) {
+      this._demoteAltModifier();
+    }
     if(event.type == 'keydown') {
       if(!event.repeat) { // StateEvent
         this._pressedKeys.add(code);
@@ -190,13 +221,69 @@ export class Sender extends LocalInputManager {
         }
       }
       // TextEvent
-      if (this._isTextInputKey(event)) {
+      if (!isAppClaimedChord && this._isTextInputKey(event)) {
         this._queueTextEvent(this.keyboard, event);
       }
     }
     else if(event.type == 'keyup') {
       this._pressedKeys.delete(code);
       this.keyboard.queueEvent({ type: 'keyup', code: code });
+      this._queueStateEvent(this.keyboard.currentState, this.keyboard);
+    }
+  }
+
+  /**
+   * True for a modifier + digit the application owns.
+   *
+   * Alt counts alongside Ctrl because outside fullscreen the sender already stands Alt in for
+   * Control (see `setAltAsControlFallback`), so Alt+1 is how a windowed player types the same chord.
+   * AltGr - which Windows reports as Ctrl+Alt - is left alone: on many layouts it produces a real
+   * character, and swallowing it would break typing.
+   */
+  _isAppClaimedChord(event) {
+    if (!event || !event.code || !APP_CLAIMED_MODIFIER_DIGITS.has(event.code)) {
+      return false;
+    }
+    if (event.ctrlKey && event.altKey) {
+      return false;
+    }
+    return event.ctrlKey || event.metaKey || (this._altAsControlFallback && event.altKey);
+  }
+
+  /**
+   * Hands the application a real Alt for the length of a chord.
+   *
+   * Outside fullscreen this sender stands Alt in for Control, and the modifier's keydown has
+   * already gone out under that substitution by the time a digit arrives - so without this the
+   * application would see Ctrl+1, which is a different thing entirely (and the movement key it
+   * was moved off in the first place). Queued before the digit's own event so the modifier is
+   * already held when the chord is evaluated.
+   */
+  _promoteAltModifier() {
+    if (!this._altAsControlFallback || this._altPromoted) {
+      return;
+    }
+    for (const code of CONTROL_CODES) {
+      if (this._pressedKeys.has(code)) {
+        this._pressedKeys.delete(code);
+        this.keyboard.queueEvent({ type: 'keyup', code: code });
+      }
+    }
+    this._pressedKeys.add('AltLeft');
+    this.keyboard.queueEvent({ type: 'keydown', code: 'AltLeft' });
+    this._queueStateEvent(this.keyboard.currentState, this.keyboard);
+    this._altPromoted = true;
+  }
+
+  /** Releases the stand-in Alt once the physical key is let go. */
+  _demoteAltModifier() {
+    if (!this._altPromoted) {
+      return;
+    }
+    this._altPromoted = false;
+    if (this._pressedKeys.has('AltLeft')) {
+      this._pressedKeys.delete('AltLeft');
+      this.keyboard.queueEvent({ type: 'keyup', code: 'AltLeft' });
       this._queueStateEvent(this.keyboard.currentState, this.keyboard);
     }
   }
@@ -272,6 +359,9 @@ export class Sender extends LocalInputManager {
   }
 
   _releaseAllKeys() {
+    // The stand-in Alt is released along with everything else, so a blur mid-chord cannot leave the
+    // application holding a modifier nobody is pressing.
+    this._altPromoted = false;
     if (!this.keyboard || this._pressedKeys.size === 0) {
       return;
     }
