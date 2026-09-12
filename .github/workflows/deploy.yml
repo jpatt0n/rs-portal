@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -24,6 +28,24 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Locate receiver release
+        id: receiver
+        run: |
+          node --input-type=module -e "import { readdirSync, appendFileSync } from 'node:fs'; const versions = readdirSync('dist/rs/releases'); if (versions.length !== 1 || !/^[a-f0-9]{16}$/.test(versions[0])) throw new Error('Expected one receiver release'); appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + versions[0] + '\n');"
+
+      # Each release owns its FTP state, so deploying the next version does not
+      # delete receiver modules still in use by an open browser session.
+      - name: Deploy receiver release first
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: ${{ secrets.FTP_PORT || 21 }}
+          protocol: ftps
+          local-dir: dist/rs/releases/${{ steps.receiver.outputs.version }}/
+          server-dir: ${{ secrets.FTP_DEST }}rs/releases/${{ steps.receiver.outputs.version }}/
+
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.6
         with:
@@ -39,3 +61,4 @@ jobs:
             **/node_modules/**
             **/src/**
             **/public/assets/.DS_Store
+            rs/releases/**

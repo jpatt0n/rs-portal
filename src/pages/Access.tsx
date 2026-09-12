@@ -3,7 +3,8 @@ import { Navigate } from "react-router-dom"
 
 const PROD_SIGNALING_BASE_URL = "https://stream.renderedsenseless.com"
 const LOCAL_SIGNALING_PORT = 55055
-const RENDER_STREAMING_BASE_PATH = "/rs"
+declare const __RENDER_STREAMING_BASE_PATH__: string
+const RENDER_STREAMING_BASE_PATH = __RENDER_STREAMING_BASE_PATH__
 const BODY_CLASS = "rs-app"
 
 declare global {
