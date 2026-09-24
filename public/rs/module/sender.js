@@ -52,7 +52,6 @@ export class Sender extends LocalInputManager {
 
     this._onResizeEventHandler = this._onResizeEvent.bind(this);
     this._onMouseEventHandler = this._onMouseEvent.bind(this);
-    this._onWheelEventHandler = this._onWheelEvent.bind(this);
     this._onKeyEventHandler = this._onKeyEvent.bind(this);
     this._onGamepadEventHandler = this._onGamepadEvent.bind(this);
     this._onTouchEventHandler = this._onTouchEvent.bind(this);
@@ -85,7 +84,7 @@ export class Sender extends LocalInputManager {
     this._elem.addEventListener('mousedown', this._onMouseEventHandler, false);
     this._elem.addEventListener('mouseup', this._onMouseEventHandler, false);
     this._elem.addEventListener('mousemove', this._onMouseEventHandler, false);
-    this._elem.addEventListener('wheel', this._onWheelEventHandler, false);
+    this._elem.addEventListener('wheel', this._onMouseEventHandler, false);
   }
 
   addKeyboard() {
@@ -199,11 +198,8 @@ export class Sender extends LocalInputManager {
         value => value * this._mouseSensitivity
       );
     }
+    // Wheel packets replace the full mouse state too, so every event must use video coordinates.
     this.mouse.currentState.position = this._corrector.map(this.mouse.currentState.position);
-    this._queueStateEvent(this.mouse.currentState, this.mouse);
-  }
-  _onWheelEvent(event) {
-    this.mouse.queueEvent(event);
     this._queueStateEvent(this.mouse.currentState, this.mouse);
   }
   _onKeyEvent(event) {
@@ -496,7 +492,7 @@ export class Sender extends LocalInputManager {
     this._elem.removeEventListener('mousedown', this._onMouseEventHandler, false);
     this._elem.removeEventListener('mouseup', this._onMouseEventHandler, false);
     this._elem.removeEventListener('mousemove', this._onMouseEventHandler, false);
-    this._elem.removeEventListener('wheel', this._onWheelEventHandler, false);
+    this._elem.removeEventListener('wheel', this._onMouseEventHandler, false);
     this._elem.removeEventListener('touchend', this._onTouchEventHandler, false);
     this._elem.removeEventListener('touchstart', this._onTouchEventHandler, false);
     this._elem.removeEventListener('touchcancel', this._onTouchEventHandler, false);

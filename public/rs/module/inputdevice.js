@@ -223,7 +223,7 @@ export class MouseState extends IInputState {
     super();
 
     this.position = [event.clientX, event.clientY];
-    this.delta = [event.movementX, -event.movementY];
+    this.delta = event.type === 'wheel' ? [0, 0] : [event.movementX, -event.movementY];
     this.scroll = [0, 0];
     if(event.type === 'wheel') {
       this.scroll = [event.deltaX, -event.deltaY];
