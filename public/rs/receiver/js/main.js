@@ -669,7 +669,7 @@ function handlePointerLockControlMessage(raw) {
   try {
     const message = JSON.parse(raw);
     if (message.type === 'state') {
-      videoPlayer.setApplicationPointerLock(message.active === true);
+      videoPlayer.setApplicationPointerLock(message.active === true, message.manipulationEnabled === true);
     }
   } catch {
     // Ignore malformed state from an obsolete or mismatched Unity peer.

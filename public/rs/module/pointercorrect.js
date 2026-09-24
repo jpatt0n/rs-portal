@@ -42,6 +42,13 @@ export class PointerCorrector {
     return _position;
   }
 
+  /** Map relative movement to video pixels using the same letterbox scale as position. */
+  mapDelta(delta) {
+    if (!this._isReady) return delta;
+    return [delta[0] * this._videoWidth / this._contentRect.width,
+      delta[1] * this._videoHeight / this._contentRect.height];
+  }
+
   /**
    * @param {Number} videoWidth
    */

@@ -44,6 +44,9 @@ export class Sender extends LocalInputManager {
     this._handheldMirror = false;
     this._applicationPointerLock = false;
     this._cameraOwnedPointerLock = false;
+    this._manipulationEnabled = false;
+    this._manipulationAnchor = null;
+    this._expectedPointerUnlock = false;
     this._corrector = new PointerCorrector(
       this._elem.videoWidth,
       this._elem.videoHeight,
@@ -194,12 +197,13 @@ export class Sender extends LocalInputManager {
     // movement, and the application now has camera modes - the handheld camera above all - that pan
     // without a button held; those have to answer the same speed setting as a right-drag does.
     if (event.type === 'mousemove') {
-      this.mouse.currentState.delta = this.mouse.currentState.delta.map(
-        value => value * this._mouseSensitivity
-      );
+      this.mouse.currentState.delta = this._isManipulatingPointer()
+        ? this._corrector.mapDelta(this.mouse.currentState.delta)
+        : this.mouse.currentState.delta.map(value => value * this._mouseSensitivity);
     }
     // Wheel packets replace the full mouse state too, so every event must use video coordinates.
-    this.mouse.currentState.position = this._corrector.map(this.mouse.currentState.position);
+    this.mouse.currentState.position = this._manipulationAnchor
+      ? [...this._manipulationAnchor] : this._corrector.map(this.mouse.currentState.position);
     this._queueStateEvent(this.mouse.currentState, this.mouse);
   }
   _onKeyEvent(event) {
@@ -216,6 +220,7 @@ export class Sender extends LocalInputManager {
     if(event.type == 'keydown') {
       if(!event.repeat) { // StateEvent
         this._pressedKeys.add(code);
+        this._updateManipulationPointerLock();
         this.keyboard.queueEvent({ type: 'keydown', code: code });
         this._queueStateEvent(this.keyboard.currentState, this.keyboard);
         this._updateHandheldMirror(event);
@@ -230,6 +235,7 @@ export class Sender extends LocalInputManager {
     }
     else if(event.type == 'keyup') {
       this._pressedKeys.delete(code);
+      this._updateManipulationPointerLock();
       this.keyboard.queueEvent({ type: 'keyup', code: code });
       this._queueStateEvent(this.keyboard.currentState, this.keyboard);
     }
@@ -294,8 +300,10 @@ export class Sender extends LocalInputManager {
   }
 
   /** Applies Unity's authoritative per-player crosshair/handheld cursor state. */
-  setApplicationPointerLock(active) {
+  setApplicationPointerLock(active, manipulationEnabled = false) {
     this._applicationPointerLock = active === true;
+    this._manipulationEnabled = manipulationEnabled === true;
+    this._updateManipulationPointerLock();
     if (this._wantsCameraPointerLock()) {
       this._captureCameraPointerLock();
     } else {
@@ -304,7 +312,24 @@ export class Sender extends LocalInputManager {
   }
 
   _wantsCameraPointerLock() {
-    return this._handheldMirror || this._applicationPointerLock;
+    return this._handheldMirror || this._applicationPointerLock || this._isManipulatingPointer();
+  }
+
+  _isManipulatingPointer() {
+    return this._manipulationEnabled && (this._pressedKeys.has('KeyQ') || this._pressedKeys.has('KeyE'));
+  }
+
+  _updateManipulationPointerLock() {
+    if (this._isManipulatingPointer()) {
+      if (!this._manipulationAnchor && this.mouse?.currentState) {
+        this._manipulationAnchor = [...this.mouse.currentState.position];
+      }
+      // Called inside the trusted keydown: no network round trip before cursor capture.
+      this._captureCameraPointerLock();
+    } else {
+      this._manipulationAnchor = null;
+      if (!this._wantsCameraPointerLock()) this._releaseCameraPointerLock();
+    }
   }
 
   _captureCameraPointerLock() {
@@ -318,9 +343,18 @@ export class Sender extends LocalInputManager {
       return;
     }
     this._cameraOwnedPointerLock = true;
-    const request = this._elem.requestPointerLock();
+    let request;
+    try {
+      request = this._elem.requestPointerLock();
+    } catch {
+      this._cameraOwnedPointerLock = false;
+      return;
+    }
     if (request && request.catch) {
-      request.catch(() => { this._cameraOwnedPointerLock = false; });
+      request.then(() => {
+        this._cameraOwnedPointerLock = document.pointerLockElement === this._elem;
+        if (!this._wantsCameraPointerLock()) this._releaseCameraPointerLock();
+      }).catch(() => { this._cameraOwnedPointerLock = false; });
     }
   }
 
@@ -335,6 +369,7 @@ export class Sender extends LocalInputManager {
     if (this._cameraOwnedPointerLock &&
         document.pointerLockElement === this._elem &&
         document.exitPointerLock) {
+      this._expectedPointerUnlock = true;
       document.exitPointerLock();
     }
     this._cameraOwnedPointerLock = false;
@@ -345,6 +380,11 @@ export class Sender extends LocalInputManager {
       return;
     }
     this._cameraOwnedPointerLock = false;
+    if (this._expectedPointerUnlock) {
+      this._expectedPointerUnlock = false;
+      return;
+    }
+    this.releaseAllInputs();
     if (!this._handheldMirror) {
       return;
     }
@@ -476,6 +516,7 @@ export class Sender extends LocalInputManager {
   releaseAllInputs() {
     this._releaseAllKeys();
     this._releaseMouseButtons();
+    this._updateManipulationPointerLock();
   }
 
   dispose() {

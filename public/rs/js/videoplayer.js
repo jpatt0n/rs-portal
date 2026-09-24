@@ -37,7 +37,6 @@ export class VideoPlayer {
     this._onWindowBlurHandler = this._onWindowBlur.bind(this);
     this._onPageHideHandler = this._onPageHide.bind(this);
     this._onVisibilityChangeHandler = this._onVisibilityChange.bind(this);
-    this._onPointerLockChangeHandler = this._onPointerLockChange.bind(this);
     this._keyboardLockRequest = null;
   }
 
@@ -98,9 +97,6 @@ export class VideoPlayer {
     window.addEventListener('blur', this._onWindowBlurHandler, false);
     window.addEventListener('pagehide', this._onPageHideHandler, false);
     document.addEventListener('visibilitychange', this._onVisibilityChangeHandler, false);
-    document.addEventListener('pointerlockchange', this._onPointerLockChangeHandler, false);
-    document.addEventListener('mozpointerlockchange', this._onPointerLockChangeHandler, false);
-    document.addEventListener('webkitpointerlockchange', this._onPointerLockChangeHandler, false);
   }
 
   setMouseSensitivity(value) {
@@ -278,15 +274,6 @@ export class VideoPlayer {
     }
   }
 
-  _onPointerLockChange() {
-    const pointerLockElement = document.pointerLockElement
-      || document.webkitPointerLockElement
-      || document.mozPointerLockElement;
-    if (!pointerLockElement) {
-      this._releaseCapturedInputs();
-    }
-  }
-
   _shouldCaptureKeyboardInput() {
     if (!this.videoElement || !this.playerElement) {
       return false;
@@ -448,9 +435,6 @@ export class VideoPlayer {
     window.removeEventListener('blur', this._onWindowBlurHandler, false);
     window.removeEventListener('pagehide', this._onPageHideHandler, false);
     document.removeEventListener('visibilitychange', this._onVisibilityChangeHandler, false);
-    document.removeEventListener('pointerlockchange', this._onPointerLockChangeHandler, false);
-    document.removeEventListener('mozpointerlockchange', this._onPointerLockChangeHandler, false);
-    document.removeEventListener('webkitpointerlockchange', this._onPointerLockChangeHandler, false);
 
     this.playerElement = null;
     this.lockMouseCheck = null;
@@ -506,9 +490,9 @@ export class VideoPlayer {
     }
   }
 
-  setApplicationPointerLock(active) {
+  setApplicationPointerLock(active, manipulationEnabled = false) {
     if (this.sender) {
-      this.sender.setApplicationPointerLock(active);
+      this.sender.setApplicationPointerLock(active, manipulationEnabled);
     }
   }
 
