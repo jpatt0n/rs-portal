@@ -239,7 +239,7 @@ function Access() {
             </div>
 
             <div className="field">
-              <label>Webcam</label>
+              <label htmlFor="webcamCheck">Use webcam</label>
               <div className="mic-row">
                 <label className="toggle">
                   <input type="checkbox" id="webcamCheck" autoComplete="off" />
@@ -340,17 +340,6 @@ function Access() {
                 />
               </div>
               <div className="input-settings-hint">Saved on this browser.</div>
-            </div>
-            <div id="webcamModeControls" className="webcam-mode-controls input-settings-section" hidden>
-              <div className="input-settings-section-title">Player mode</div>
-              <div className="webcam-mode-buttons">
-                <button id="webcamPrimaryMode" className="settings-action-button" type="button">
-                  Enter TV Man
-                </button>
-                <button id="webcamSecondaryMode" className="settings-action-button" type="button">
-                  Enter Full Control
-                </button>
-              </div>
             </div>
           </div>
           <div id="statsPanel" className="stats-panel" hidden>

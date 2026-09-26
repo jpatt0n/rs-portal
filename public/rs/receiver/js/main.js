@@ -42,9 +42,6 @@ const settingsMenu = document.getElementById('settingsMenu');
 const settingsPanel = document.getElementById('settingsPanel');
 const joinButton = document.getElementById('joinButton');
 const disconnectButton = document.getElementById('disconnectButton');
-const webcamModeControls = document.getElementById('webcamModeControls');
-const webcamPrimaryMode = document.getElementById('webcamPrimaryMode');
-const webcamSecondaryMode = document.getElementById('webcamSecondaryMode');
 const micStateLabel = document.getElementById('micStateLabel');
 const webcamCheck = document.getElementById('webcamCheck');
 const webcamStateLabel = document.getElementById('webcamStateLabel');
@@ -60,7 +57,6 @@ const audioSelect = document.querySelector('select#audioSource');
 const videoPlayer = new VideoPlayer();
 const INPUT_CHANNEL_LABEL = "input";
 const POINTER_LOCK_CONTROL_CHANNEL_LABEL = "pointer-lock-control";
-const WEBCAM_CONTROL_CHANNEL_LABEL = "webcam-control";
 const GREEN_ROOM_CHANNEL_LABEL = "green-room";
 const GREEN_ROOM_ADMITTED_BANNER_MS = 6000;
 const INPUT_CHANNEL_OPEN_TIMEOUT_MS = 10000;
@@ -76,8 +72,6 @@ const DEFAULT_MOUSE_SENSITIVITY = 1;
 let inputChannel = null;
 let pointerLockControlChannel = null;
 let pointerLockControlRecoveryTimer = null;
-let webcamControlChannel = null;
-let webcamControlRecoveryTimer = null;
 let greenRoomChannel = null;
 let greenRoomRecoveryTimer = null;
 let greenRoomBannerTimer = null;
@@ -88,9 +82,6 @@ let greenRoomBannerTimer = null;
 let isGreenRoomGuest = false;
 /** Whether the show has let this guest in. Unity is the only thing that sets it. */
 let greenRoomAdmitted = false;
-let webcamMode = 'tv-screen';
-let webcamModePending = false;
-let webcamSessionActive = false;
 let inputChannelOpenTimer = null;
 let inputChannelRecoveryTimer = null;
 let inputChannelRecovering = false;
@@ -126,20 +117,6 @@ if (joinButton) {
 
 if (disconnectButton) {
   disconnectButton.addEventListener('click', onClickDisconnectButton);
-}
-
-if (webcamPrimaryMode) {
-  webcamPrimaryMode.addEventListener('click', () => {
-    const nextMode = webcamMode === 'tv-man' ? 'tv-screen' : 'tv-man';
-    void requestWebcamMode(nextMode);
-  });
-}
-
-if (webcamSecondaryMode) {
-  webcamSecondaryMode.addEventListener('click', () => {
-    const nextMode = webcamMode === 'full-control' ? 'tv-screen' : 'full-control';
-    void requestWebcamMode(nextMode);
-  });
 }
 
 if (settingsToggle && settingsMenu) {
@@ -267,8 +244,6 @@ function setUiState(state) {
   if (disconnectButton) {
     disconnectButton.hidden = !isConnected;
   }
-
-  updateWebcamModeControls();
   updateGreenRoomBanner();
 
   if (!isConnected) {
@@ -430,7 +405,7 @@ function preparePlayerForJoin() {
   // Call play() while the Join click still carries browser user activation.
   // Waiting for loadedmetadata is too late for streams that include audio.
   videoPlayer.startPlayback();
-  if (webcamCheck && webcamCheck.checked && mayGoLive()) {
+  if (webcamCheck && webcamCheck.checked) {
     void startWebcam();
   }
 }
@@ -476,8 +451,7 @@ async function onConnect() {
   createInputChannel();
   createPointerLockControlChannel();
   createGreenRoomChannel();
-  createWebcamControlChannel();
-  if (webcamCheck && webcamCheck.checked && mayGoLive()) {
+  if (webcamCheck && webcamCheck.checked) {
     await startWebcam();
   }
   if (mediaReconnectAttempts === 0) {
@@ -510,7 +484,6 @@ async function teardownConnection(message, showReady = true) {
 
   resetInputChannelState();
   resetPointerLockControlChannel();
-  resetWebcamControlChannel();
   resetGreenRoomChannel();
   videoPlayer.deletePlayer();
   stopMicrophone();
@@ -792,60 +765,6 @@ function resetInputChannelState() {
   inputChannel = null;
 }
 
-function createWebcamControlChannel() {
-  if (!renderstreaming || !(webcamCheck && webcamCheck.checked)) {
-    updateWebcamModeControls();
-    return;
-  }
-
-  if (webcamControlChannel &&
-      (webcamControlChannel.readyState === 'open' || webcamControlChannel.readyState === 'connecting')) {
-    return;
-  }
-
-  const channel = renderstreaming.createDataChannel(WEBCAM_CONTROL_CHANNEL_LABEL);
-  if (!channel) {
-    scheduleWebcamControlRecovery();
-    return;
-  }
-
-  webcamControlChannel = channel;
-  const onOpen = () => {
-    if (channel !== webcamControlChannel) {
-      return;
-    }
-    clearWebcamControlRecovery();
-    updateWebcamModeControls();
-  };
-  const onInterrupted = () => {
-    if (channel !== webcamControlChannel) {
-      return;
-    }
-    webcamControlChannel = null;
-    webcamModePending = false;
-    webcamSessionActive = false;
-    updateWebcamModeControls();
-    scheduleWebcamControlRecovery();
-  };
-  const onMessage = event => handleWebcamControlMessage(event.data);
-
-  if (channel.addEventListener) {
-    channel.addEventListener('open', onOpen);
-    channel.addEventListener('close', onInterrupted);
-    channel.addEventListener('error', onInterrupted);
-    channel.addEventListener('message', onMessage);
-  } else {
-    channel.onopen = onOpen;
-    channel.onclose = onInterrupted;
-    channel.onerror = onInterrupted;
-    channel.onmessage = onMessage;
-  }
-}
-
-/**
- * Opens the channel Unity uses to tell a guest whether they are still waiting or have been let in.
- * Guests only - a cast member has nothing to be told.
- */
 function createGreenRoomChannel() {
   if (!renderstreaming || !isGreenRoomGuest) {
     return;
@@ -935,9 +854,8 @@ function handleGreenRoomMessage(raw) {
 }
 
 /**
- * Moves the page between waiting and being on air. Everything the guest sends is downstream of this
- * one flag, so admission opens the microphone and camera in the same breath as it changes the words
- * on the banner.
+ * Admission controls microphone routing and the waiting-room banner.
+ * Webcam capture and sending are independently controlled by the checkbox.
  */
 async function applyGreenRoomAdmission(admitted) {
   if (greenRoomAdmitted === admitted) {
@@ -949,20 +867,13 @@ async function applyGreenRoomAdmission(admitted) {
   greenRoomAdmitted = admitted;
   updateGreenRoomBanner();
   updateMicState();
-  updateWebcamModeControls();
 
   if (!admitted) {
     return;
   }
 
-  // Only now does anything of theirs reach the show. Both devices were left closed until this
-  // point, so this is the first getUserMedia call the page makes. The microphone goes through
-  // scheduleMicrophoneStart for its settle delay, in case a cast member is quick enough on the
-  // button to land the new transceiver inside the initial negotiation.
+  // Keep microphone startup behind admission and its negotiation settle delay.
   scheduleMicrophoneStart();
-  if (webcamCheck && webcamCheck.checked) {
-    await startWebcam();
-  }
 }
 
 function updateGreenRoomBanner() {
@@ -990,8 +901,8 @@ function updateGreenRoomBanner() {
     }
     if (greenRoomDetail) {
       greenRoomDetail.textContent =
-        'You can see and hear the show, but nobody can see or hear you: your microphone is off and '
-        + 'your camera is not being sent. A cast member will bring you in.';
+        'You can see and hear the show. Your microphone is off while you wait. '
+        + 'If enabled, your webcam is being sent to the host. A cast member will bring you in.';
     }
     return;
   }
@@ -1001,10 +912,8 @@ function updateGreenRoomBanner() {
   }
   if (greenRoomDetail) {
     const micWanted = !!(micCheck && micCheck.checked);
-    const camWanted = !!(webcamCheck && webcamCheck.checked);
-    const live = [micWanted ? 'microphone' : null, camWanted ? 'camera' : null].filter(Boolean);
-    greenRoomDetail.textContent = live.length
-      ? `Your ${live.join(' and ')} ${live.length > 1 ? 'are' : 'is'} now live.`
+    greenRoomDetail.textContent = micWanted
+      ? 'Your microphone is now live.'
       : 'Your microphone is still off - turn it on when you are ready.';
   }
 
@@ -1012,106 +921,6 @@ function updateGreenRoomBanner() {
     greenRoomBannerTimer = null;
     greenRoomBanner.hidden = true;
   }, GREEN_ROOM_ADMITTED_BANNER_MS);
-}
-
-function scheduleWebcamControlRecovery() {
-  if (!renderstreaming || isTearingDown || !(webcamCheck && webcamCheck.checked) || webcamControlRecoveryTimer != null) {
-    return;
-  }
-  webcamControlRecoveryTimer = setTimeout(() => {
-    webcamControlRecoveryTimer = null;
-    createWebcamControlChannel();
-  }, INPUT_CHANNEL_RECOVERY_DELAY_MS);
-}
-
-function clearWebcamControlRecovery() {
-  if (webcamControlRecoveryTimer != null) {
-    clearTimeout(webcamControlRecoveryTimer);
-    webcamControlRecoveryTimer = null;
-  }
-}
-
-function resetWebcamControlChannel() {
-  clearWebcamControlRecovery();
-  const channel = webcamControlChannel;
-  webcamControlChannel = null;
-  if (channel && channel.readyState !== 'closed') {
-    channel.close();
-  }
-  webcamMode = 'tv-screen';
-  webcamModePending = false;
-  webcamSessionActive = false;
-  updateWebcamModeControls();
-}
-
-function handleWebcamControlMessage(raw) {
-  if (typeof raw !== 'string') {
-    return;
-  }
-
-  let message;
-  try {
-    message = JSON.parse(raw);
-  } catch {
-    return;
-  }
-
-  if (message.type === 'state' && ['tv-screen', 'tv-man', 'full-control'].includes(message.mode)) {
-    webcamMode = message.mode;
-    webcamModePending = false;
-    webcamSessionActive = message.active === true;
-    if (webcamSessionActive) {
-      setStatusMessage('');
-    }
-    updateWebcamModeControls();
-  } else if (message.type === 'error') {
-    webcamModePending = false;
-    setStatusMessage(message.error || 'Webcam mode change failed.');
-    updateWebcamModeControls();
-  }
-}
-
-async function requestWebcamMode(mode) {
-  if (!webcamControlChannel || webcamControlChannel.readyState !== 'open' || webcamModePending) {
-    setStatusMessage('Webcam controls are still connecting.');
-    return;
-  }
-  if (!webcamSessionActive) {
-    setStatusMessage('Webcam stream is still connecting to Unity.');
-    return;
-  }
-
-  if (mode === 'tv-man' && !window.confirm('Enter TV Man? You will control the TV Man with clicks or WASD while the rest of the client controls stay locked.')) {
-    return;
-  }
-  if (mode === 'full-control' && !window.confirm('Enter Full Control? This enables the complete client interface and controls.')) {
-    return;
-  }
-
-  webcamModePending = true;
-  updateWebcamModeControls();
-  webcamControlChannel.send(JSON.stringify({ type: 'set-mode', mode }));
-}
-
-function updateWebcamModeControls() {
-  if (!webcamModeControls) {
-    return;
-  }
-
-  const visible = document.body.dataset.state === 'connected' && !!(webcamCheck && webcamCheck.checked);
-  webcamModeControls.hidden = !visible;
-  if (!visible) {
-    return;
-  }
-
-  if (webcamPrimaryMode) {
-    webcamPrimaryMode.textContent = webcamMode === 'tv-man' ? 'Return to TV Screen' : 'Enter TV Man';
-    webcamPrimaryMode.disabled = webcamModePending || !webcamSessionActive;
-  }
-  if (webcamSecondaryMode) {
-    webcamSecondaryMode.textContent = webcamMode === 'full-control' ? 'Return to TV Screen' : 'Enter Full Control';
-    webcamSecondaryMode.disabled = webcamModePending || !webcamSessionActive;
-  }
 }
 
 function setCodecPreferences() {
@@ -1219,7 +1028,6 @@ function updateWebcamState() {
       wrapper.classList.toggle('is-active', !!(webcamCheck && webcamCheck.checked && localVideoTrack));
     }
   }
-  updateWebcamModeControls();
 }
 
 let localAudioStream = null;
@@ -1465,7 +1273,6 @@ async function startWebcamInternal() {
     localVideoTrack.enabled = true;
     updateWebcamState();
     await ensureWebcamTrackAttached();
-    createWebcamControlChannel();
     return;
   }
 
@@ -1485,19 +1292,26 @@ async function startWebcamInternal() {
     if (webcamCheck) {
       webcamCheck.checked = false;
     }
-    resetWebcamControlChannel();
     updateWebcamState();
     return;
   }
 
+  // The checkbox can be cleared while the browser permission prompt is open.
+  if (!webcamCheck?.checked || isTearingDown) {
+    localVideoStream.getTracks().forEach(track => track.stop());
+    localVideoStream = null;
+    updateWebcamState();
+    return;
+  }
   localVideoTrack = localVideoStream.getVideoTracks()[0];
   if (!localVideoTrack) {
-    resetWebcamControlChannel();
     return;
   }
 
-  await requestHighestWebcamResolution(localVideoTrack);
-  localVideoTrack.contentHint = 'detail';
+  const capturedTrack = localVideoTrack;
+  await requestHighestWebcamResolution(capturedTrack);
+  if (localVideoTrack !== capturedTrack || !webcamCheck?.checked || isTearingDown) return;
+  capturedTrack.contentHint = 'detail';
 
   if (webcamPreview) {
     webcamPreview.srcObject = localVideoStream;
@@ -1505,7 +1319,6 @@ async function startWebcamInternal() {
   }
   updateWebcamState();
   await ensureWebcamTrackAttached();
-  createWebcamControlChannel();
 }
 
 async function requestHighestWebcamResolution(track) {
@@ -1586,9 +1399,8 @@ async function configureWebcamSender(sender) {
 }
 
 async function ensureWebcamTrackAttached() {
-  // A waiting guest may still open their camera to check themselves - the preview is local. What
-  // they may not do is send it: their face would land on the set's TV mid-scene.
-  if (!renderstreaming || !localVideoTrack || !mayGoLive()) {
+  // Sending a webcam is the joiner's choice; the host owns its presentation.
+  if (!renderstreaming || !localVideoTrack) {
     return;
   }
 
@@ -1618,7 +1430,6 @@ function stopWebcam() {
   if (webcamPreview) {
     webcamPreview.srcObject = null;
   }
-  resetWebcamControlChannel();
   updateWebcamState();
 }
 

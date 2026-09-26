@@ -367,18 +367,6 @@ body[data-state="waiting"] .status {
   position: static;
 }
 
-.webcam-mode-controls {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 12px;
-}
-
-.webcam-mode-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 8px;
-}
-
 .settings-action-button {
   min-width: 0;
   min-height: 38px;
@@ -609,7 +597,6 @@ body[data-state="waiting"] .status {
 #connectedTools[hidden],
 #inputSettingsPanel[hidden],
 #statsPanel[hidden],
-#webcamModeControls[hidden],
 #greenRoomBanner[hidden],
 #disconnectButton[hidden] {
   display: none;
