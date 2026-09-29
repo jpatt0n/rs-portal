@@ -38,6 +38,7 @@ export class VideoPlayer {
     this._onPageHideHandler = this._onPageHide.bind(this);
     this._onVisibilityChangeHandler = this._onVisibilityChange.bind(this);
     this._keyboardLockRequest = null;
+    this._keyboardCaptureButton = null;
   }
 
   /**
@@ -87,6 +88,14 @@ export class VideoPlayer {
     this.fullScreenButtonElement.src = `${basePath}/images/FullScreen.png`;
     this.fullScreenButtonElement.addEventListener("click", this._onClickFullscreenButton.bind(this));
     this.playerElement.appendChild(this.fullScreenButtonElement);
+
+    this._keyboardCaptureButton = document.createElement('button');
+    this._keyboardCaptureButton.type = 'button';
+    this._keyboardCaptureButton.className = 'keyboard-capture-retry';
+    this._keyboardCaptureButton.hidden = true;
+    this._keyboardCaptureButton.textContent = 'Esc will release the cursor. Click to retry keyboard capture.';
+    this._keyboardCaptureButton.addEventListener('click', () => this._lockKeyboardMovementKeys());
+    this.playerElement.appendChild(this._keyboardCaptureButton);
 
     document.addEventListener('webkitfullscreenchange', this._onFullscreenChangeHandler);
     document.addEventListener('fullscreenchange', this._onFullscreenChangeHandler);
@@ -191,7 +200,8 @@ export class VideoPlayer {
 
   _onFullscreenChange() {
     const fullscreenElement = document.webkitFullscreenElement || document.fullscreenElement || document.mozFullScreenElement;
-    const isFullscreen = !!fullscreenElement;
+    const isFullscreen = fullscreenElement === this.playerElement ||
+      !!(fullscreenElement && this.playerElement.contains(fullscreenElement));
     this.playerElement.classList.toggle('is-fullscreen', isFullscreen);
     this.fullScreenButtonElement.style.display = isFullscreen ? 'none' : 'block';
     this.resizeVideo();
@@ -233,6 +243,8 @@ export class VideoPlayer {
   }
 
   _mouseClickFullScreen() {
+    // A denied entry request can be retried under this fresh user gesture.
+    this._lockKeyboardMovementKeys();
     // Restores pointer lock when we unfocus the fullscreen player and click on it again
     this.sender?.setManualPointerLock(this.lockMouseCheck.checked);
   }
@@ -296,6 +308,11 @@ export class VideoPlayer {
   _lockKeyboardMovementKeys() {
     if (this._keyboardLockRequest) return;
     if (!navigator.keyboard || typeof navigator.keyboard.lock !== 'function') {
+      if (this._keyboardCaptureButton) {
+        this._keyboardCaptureButton.textContent = 'This browser cannot capture Esc; it will release the cursor.';
+        this._keyboardCaptureButton.disabled = true;
+        this._keyboardCaptureButton.hidden = false;
+      }
       return;
     }
     this._keyboardLockRequest = navigator.keyboard.lock([
@@ -313,9 +330,13 @@ export class VideoPlayer {
       'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4', 'Numpad5'
     ]);
     const request = this._keyboardLockRequest;
-    request.catch(error => {
+    request.then(() => {
+      if (this._keyboardLockRequest === request && this._keyboardCaptureButton)
+        this._keyboardCaptureButton.hidden = true;
+    }, error => {
       if (this._keyboardLockRequest !== request) return;
       this._keyboardLockRequest = null;
+      if (this._keyboardCaptureButton) this._keyboardCaptureButton.hidden = false;
       console.warn('Chrome did not grant keyboard capture; Escape remains a browser shortcut.', error);
     });
   }
@@ -325,6 +346,7 @@ export class VideoPlayer {
       navigator.keyboard.unlock();
     }
     this._keyboardLockRequest = null;
+    if (this._keyboardCaptureButton) this._keyboardCaptureButton.hidden = true;
   }
 
   /**
@@ -401,6 +423,8 @@ export class VideoPlayer {
     }
     this._releaseCapturedInputs();
     this._unlockKeyboardMovementKeys();
+    this._keyboardCaptureButton?.remove();
+    this._keyboardCaptureButton = null;
     this._setInputSenderChannel(null);
     if (this.inputRemoting) {
       this.inputRemoting.stopSending();

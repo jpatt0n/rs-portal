@@ -1,3 +1,20 @@
+.keyboard-capture-retry:not([hidden]) {
+  position: absolute;
+  z-index: 20;
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90%;
+  padding: 12px 18px;
+  border: 1px solid #aaa;
+  border-radius: 8px;
+  background: #17191eee;
+  color: white;
+  font: 16px/1.4 system-ui, sans-serif;
+  white-space: normal;
+  cursor: pointer;
+}
+
 body.rs-app {
   font-family: 'Roboto', sans-serif;
   margin: 0;
