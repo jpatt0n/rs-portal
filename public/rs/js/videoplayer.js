@@ -205,9 +205,7 @@ export class VideoPlayer {
     }
 
     if (isFullscreen) {
-      if (this.lockMouseCheck.checked && fullscreenElement && fullscreenElement.requestPointerLock) {
-        fullscreenElement.requestPointerLock();
-      }
+      this.sender?.setManualPointerLock(this.lockMouseCheck.checked);
 
       // Subscribe to events
       document.addEventListener('mousemove', this._onMouseMoveHandler, false);
@@ -231,24 +229,12 @@ export class VideoPlayer {
     }
 
     // Restores pointer lock when we unfocus the player and click on it again
-    if (this.lockMouseCheck.checked) {
-      if (this.videoElement.requestPointerLock) {
-        this.videoElement.requestPointerLock().catch(function () { });
-      }
-    }
+    this.sender?.setManualPointerLock(this.lockMouseCheck.checked);
   }
 
   _mouseClickFullScreen() {
     // Restores pointer lock when we unfocus the fullscreen player and click on it again
-    if (this.lockMouseCheck.checked) {
-      if (document.webkitFullscreenElement.requestPointerLock) {
-        document.webkitFullscreenElement.requestPointerLock();
-      } else if (document.fullscreenElement.requestPointerLock) {
-        document.fullscreenElement.requestPointerLock();
-      } else if (document.mozFullScreenElement.requestPointerLock) {
-        document.mozFullScreenElement.requestPointerLock();
-      }
-    }
+    this.sender?.setManualPointerLock(this.lockMouseCheck.checked);
   }
 
   _onWindowKeyDown(event) {
@@ -308,6 +294,7 @@ export class VideoPlayer {
   }
 
   _lockKeyboardMovementKeys() {
+    if (this._keyboardLockRequest) return;
     if (!navigator.keyboard || typeof navigator.keyboard.lock !== 'function') {
       return;
     }
@@ -325,7 +312,12 @@ export class VideoPlayer {
       'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5',
       'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4', 'Numpad5'
     ]);
-    this._keyboardLockRequest.catch(() => { });
+    const request = this._keyboardLockRequest;
+    request.catch(error => {
+      if (this._keyboardLockRequest !== request) return;
+      this._keyboardLockRequest = null;
+      console.warn('Chrome did not grant keyboard capture; Escape remains a browser shortcut.', error);
+    });
   }
 
   _unlockKeyboardMovementKeys() {

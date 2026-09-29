@@ -44,9 +44,12 @@ export class Sender extends LocalInputManager {
     this._handheldMirror = false;
     this._applicationPointerLock = false;
     this._cameraOwnedPointerLock = false;
+    this._manualPointerLock = false;
+    this._pointerLockRequest = null;
     this._manipulationEnabled = false;
     this._manipulationAnchor = null;
     this._expectedPointerUnlock = false;
+    this._escapeForwardedDuringPointerLock = false;
     this._corrector = new PointerCorrector(
       this._elem.videoWidth,
       this._elem.videoHeight,
@@ -224,6 +227,10 @@ export class Sender extends LocalInputManager {
         this.keyboard.queueEvent({ type: 'keydown', code: code });
         this._queueStateEvent(this.keyboard.currentState, this.keyboard);
         this._updateHandheldMirror(event);
+        // Unity owns the two-press confirmation. Keep capture while its hint is visible, and
+        // remember delivery if Chrome subsequently reports an unlock for this same key.
+        if (code === 'Escape' && this._cameraOwnedPointerLock)
+          this._escapeForwardedDuringPointerLock = true;
         if (!this._loggedKeyEvent) {
           this._loggedKeyEvent = true;
         }
@@ -270,8 +277,7 @@ export class Sender extends LocalInputManager {
    * The application's handheld camera (F4 / Ctrl+4, Esc to exit) pans on bare mouse movement, so
    * while it is up the OS cursor must not exist to run into a window edge and stall the pan. Only
    * the page can reach the Pointer Lock API, so the handheld's own keys are mirrored here and the
-   * lock follows them. The mirror can drift if the application drops the handheld on its own (a
-   * cut from another client, a mode change); Esc or F4 puts both sides right.
+   * lock follows them until Unity's authoritative cursor state arrives.
    */
   _updateHandheldMirror(event) {
     if (this._isHandheldToggleChord(event)) {
@@ -281,9 +287,6 @@ export class Sender extends LocalInputManager {
         this._captureHandheldPointerLock();
       }
       return;
-    }
-    if (event.code === 'Escape' && this._handheldMirror) {
-      this._releaseHandheldPointerLock();
     }
   }
 
@@ -302,6 +305,7 @@ export class Sender extends LocalInputManager {
   /** Applies Unity's authoritative per-player crosshair/handheld cursor state. */
   setApplicationPointerLock(active, manipulationEnabled = false) {
     this._applicationPointerLock = active === true;
+    if (!this._applicationPointerLock) this._handheldMirror = false;
     this._manipulationEnabled = manipulationEnabled === true;
     this._updateManipulationPointerLock();
     if (this._wantsCameraPointerLock()) {
@@ -312,7 +316,14 @@ export class Sender extends LocalInputManager {
   }
 
   _wantsCameraPointerLock() {
-    return this._handheldMirror || this._applicationPointerLock || this._isManipulatingPointer();
+    return this._manualPointerLock || this._handheldMirror || this._applicationPointerLock || this._isManipulatingPointer();
+  }
+
+  /** The optional mouse-lock setting shares the application's capture owner. */
+  setManualPointerLock(active) {
+    this._manualPointerLock = active === true;
+    if (this._wantsCameraPointerLock()) this._captureCameraPointerLock();
+    else this._releaseCameraPointerLock();
   }
 
   _isManipulatingPointer() {
@@ -339,22 +350,33 @@ export class Sender extends LocalInputManager {
         this._cameraOwnedPointerLock;
       return;
     }
-    if (!this._elem.requestPointerLock) {
+    if (!this._elem.requestPointerLock || this._pointerLockRequest) {
       return;
     }
     this._cameraOwnedPointerLock = true;
+    this._escapeForwardedDuringPointerLock = false;
+    const token = this._pointerLockRequest = {};
     let request;
     try {
       request = this._elem.requestPointerLock();
     } catch {
+      this._pointerLockRequest = null;
       this._cameraOwnedPointerLock = false;
       return;
     }
     if (request && request.catch) {
       request.then(() => {
+        if (this._pointerLockRequest !== token) return;
+        this._pointerLockRequest = null;
         this._cameraOwnedPointerLock = document.pointerLockElement === this._elem;
         if (!this._wantsCameraPointerLock()) this._releaseCameraPointerLock();
-      }).catch(() => { this._cameraOwnedPointerLock = false; });
+      }).catch(() => {
+        if (this._pointerLockRequest !== token) return;
+        this._pointerLockRequest = null;
+        this._cameraOwnedPointerLock = document.pointerLockElement === this._elem;
+      });
+    } else {
+      this._pointerLockRequest = null;
     }
   }
 
@@ -377,21 +399,23 @@ export class Sender extends LocalInputManager {
 
   _onPointerLockChange() {
     if (document.pointerLockElement) {
+      // All player capture paths target this video, including the manual setting.
+      if (document.pointerLockElement === this._elem) this._cameraOwnedPointerLock = true;
       return;
     }
+    const cameraWasLocked = this._cameraOwnedPointerLock &&
+      (this._applicationPointerLock || this._handheldMirror);
     this._cameraOwnedPointerLock = false;
     if (this._expectedPointerUnlock) {
       this._expectedPointerUnlock = false;
       return;
     }
     this.releaseAllInputs();
-    if (!this._handheldMirror) {
+    if (!cameraWasLocked || this._escapeForwardedDuringPointerLock) {
       return;
     }
-    // The lock fell away without any exit key being seen: the browser swallows the Esc that ends a
-    // pointer lock, and Alt+Tab never reaches the page at all. The application still has the
-    // handheld up, so the Esc it never received is forwarded by hand - one press lowers the
-    // camera in both worlds.
+    // Chrome can consume Escape to unlock without delivering a keyboard event. Forward that
+    // exit for every camera mode, including the camera cursor, through the normal input route.
     this._handheldMirror = false;
     this._sendKeyTap('Escape');
   }
@@ -522,6 +546,7 @@ export class Sender extends LocalInputManager {
   dispose() {
     this.releaseAllInputs();
     this._applicationPointerLock = false;
+    this._manualPointerLock = false;
     this._releaseHandheldPointerLock();
     document.removeEventListener('pointerlockchange', this._onPointerLockChangeHandler, false);
     this._elem.removeEventListener('resize', this._onResizeEventHandler, false);
