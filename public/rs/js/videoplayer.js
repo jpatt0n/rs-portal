@@ -312,6 +312,8 @@ export class VideoPlayer {
       return;
     }
     this._keyboardLockRequest = navigator.keyboard.lock([
+      // Send Esc taps to the game; Chrome keeps hold-Esc to exit and shows its own fullscreen hint.
+      'Escape',
       'KeyW', 'KeyA', 'KeyS', 'KeyD',
       'ControlLeft', 'ControlRight',
       'ShiftLeft', 'ShiftRight', 'Space',
