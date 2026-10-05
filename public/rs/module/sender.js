@@ -1,13 +1,15 @@
 import {
   Mouse,
   Keyboard,
+  KeyboardState,
   Gamepad,
   Touchscreen,
+  InputEvent,
   StateEvent,
   TextEvent
 } from "./inputdevice.js";
 
-import { LocalInputManager } from "./inputremoting.js";
+import { LocalInputManager, MessageType } from "./inputremoting.js";
 import { GamepadHandler } from "./gamepadhandler.js";
 import { PointerCorrector } from "./pointercorrect.js";
 
@@ -62,6 +64,7 @@ export class Sender extends LocalInputManager {
     this._onGamepadEventHandler = this._onGamepadEvent.bind(this);
     this._onTouchEventHandler = this._onTouchEvent.bind(this);
     this._onWindowBlurHandler = this._onWindowBlur.bind(this);
+    this._onWindowFocusHandler = this._onWindowFocus.bind(this);
     this._onPageHideHandler = this._onPageHide.bind(this);
     this._onVisibilityChangeHandler = this._onVisibilityChange.bind(this);
     this._onPointerLockChangeHandler = this._onPointerLockChange.bind(this);
@@ -109,6 +112,7 @@ export class Sender extends LocalInputManager {
     document.addEventListener('keyup', this._onKeyEventHandler, false);
     document.addEventListener('keydown', this._onKeyEventHandler, false);
     window.addEventListener('blur', this._onWindowBlurHandler, false);
+    window.addEventListener('focus', this._onWindowFocusHandler, false);
     window.addEventListener('pagehide', this._onPageHideHandler, false);
     document.addEventListener('visibilitychange', this._onVisibilityChangeHandler, false);
   }
@@ -210,6 +214,12 @@ export class Sender extends LocalInputManager {
     this._queueStateEvent(this.mouse.currentState, this.mouse);
   }
   _onKeyEvent(event) {
+    // Alt-Tab can leave a keydown arriving after blur, with its keyup going to another app.
+    // Release edges remain safe to deliver; background presses must not restart a hold.
+    if (event.type === 'keydown' &&
+        (document.visibilityState === 'hidden' || !document.hasFocus())) {
+      return;
+    }
     const code = this._resolveKeyCode(event);
     if (!code) {
       return;
@@ -490,26 +500,29 @@ export class Sender extends LocalInputManager {
     this.releaseAllInputs();
   }
 
+  _onWindowFocus() {
+    // Reconcile the remote keyboard after a keyup/blur that never reached the page or host.
+    this.releaseAllInputs();
+  }
+
   _onPageHide() {
     this.releaseAllInputs();
   }
 
   _onVisibilityChange() {
-    if (document.visibilityState === 'hidden') {
-      this.releaseAllInputs();
-    }
+    // Tab visibility changes need the same reconciliation when hiding and returning.
+    this.releaseAllInputs();
   }
 
   _releaseAllKeys() {
-    if (!this.keyboard || this._pressedKeys.size === 0) {
+    this._pressedKeys.clear();
+    if (!this.keyboard?.currentState) {
       return;
     }
-    const keysToRelease = Array.from(this._pressedKeys);
-    this._pressedKeys.clear();
-    for (const code of keysToRelease) {
-      this.keyboard.queueEvent({ type: 'keyup', code: code });
-      this._queueStateEvent(this.keyboard.currentState, this.keyboard);
-    }
+    // Send one complete neutral snapshot, even if local bookkeeping is already empty.
+    // This also clears whichever modifier Alt was mapped to before focus was lost.
+    new Uint8Array(this.keyboard.currentState.keys).fill(0);
+    this._queueStateEvent(this.keyboard.currentState, this.keyboard);
   }
 
   _releaseMouseButtons() {
@@ -568,6 +581,7 @@ export class Sender extends LocalInputManager {
     document.removeEventListener('keydown', this._onKeyEventHandler, false);
     document.removeEventListener('visibilitychange', this._onVisibilityChangeHandler, false);
     window.removeEventListener('blur', this._onWindowBlurHandler, false);
+    window.removeEventListener('focus', this._onWindowFocusHandler, false);
     window.removeEventListener('pagehide', this._onPageHideHandler, false);
     window.removeEventListener("gamepadconnected", this._onGamepadEventHandler, false);
     window.removeEventListener("gamepaddisconnected", this._onGamepadEventHandler, false);
@@ -622,8 +636,14 @@ export class Observer {
     if(this.channel == null || this.channel.readyState != 'open') {
       return;
     }
+    // Keyboard state edges are low-volume and must stay reliable: dropping a release
+    // leaves Unity holding a movement key until another keyboard snapshot arrives.
+    const isKeyboardState = message.type === MessageType.NewEvents
+      && message.data.byteLength >= InputEvent.size + 4
+      && new DataView(message.data).getInt32(0, true) === StateEvent.format
+      && new DataView(message.data).getInt32(InputEvent.size, true) === KeyboardState.format;
     if (typeof this.channel.bufferedAmount === 'number'
-      && this.channel.bufferedAmount > this.maxBufferedAmount) {
+      && this.channel.bufferedAmount > this.maxBufferedAmount && !isKeyboardState) {
       return;
     }
     this.channel.send(message.buffer);
