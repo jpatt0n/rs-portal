@@ -15,7 +15,7 @@ let isTearingDown = false;
 let admissionKind = null;
 /** @type {string} */
 let admissionKey = '';
-/** @type {{username:string, profile:string, kind:string}|null} */
+/** @type {{username:string, profile:string, kind:string, microphoneEnabledByDefault?:boolean}|null} */
 let admissionIdentity = null;
 /** @type {string} */
 let admissionToken = '';
@@ -1503,6 +1503,8 @@ async function setupAdmission() {
       admissionToken = result.token;
       usernameInput.value = sanitizeUsername(result.identity.username);
       usernameInput.readOnly = false;
+      // Apply the pass's initial choice once; join/reconnect keeps the user's later toggle.
+      await setMicEnabled(result.identity.microphoneEnabledByDefault !== false);
       joinButton.disabled = false;
       setStatusMessage('Cast pass recognized. You can change the username for testing.');
     } catch (error) {
