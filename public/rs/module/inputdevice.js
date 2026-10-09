@@ -223,7 +223,9 @@ export class MouseState extends IInputState {
     super();
 
     this.position = [event.clientX, event.clientY];
-    this.delta = event.type === 'wheel' ? [0, 0] : [event.movementX, -event.movementY];
+    // Only movement events carry relative motion. Button/click events can expose stale
+    // movement values around pointer capture; forwarding them rotates a live handheld.
+    this.delta = event.type === 'mousemove' ? [event.movementX, -event.movementY] : [0, 0];
     this.scroll = [0, 0];
     if(event.type === 'wheel') {
       this.scroll = [event.deltaX, -event.deltaY];

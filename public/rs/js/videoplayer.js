@@ -228,9 +228,9 @@ export class VideoPlayer {
   }
 
   _mouseMove(event) {
-    // Forward mouseMove event of fullscreen player directly to sender
-    // This is required, as the regular mousemove event doesn't fire when in fullscreen mode
-    this.sender._onMouseEvent(event);
+    // The video listener already delivered events that bubble from the video. Only
+    // forward fullscreen motion outside it; otherwise relative look is sent twice.
+    if (event.target !== this.videoElement) this.sender?._onMouseEvent(event);
   }
 
   _mouseClick() {
