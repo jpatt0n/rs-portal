@@ -67,6 +67,20 @@ export function createDisplayStringArray(report, lastReport, audioElement) {
         array.push(`Decoder: ${stat.decoderImplementation}`);
         array.push(`Resolution: ${stat.frameWidth}x${stat.frameHeight}`);
         array.push(`Framerate: ${stat.framesPerSecond}`);
+        const previous = lastReport?.get(stat.id);
+        const frames = stat.jitterBufferEmittedCount - (previous?.jitterBufferEmittedCount ?? 0);
+        if (frames > 0) {
+          for (const [field, label] of [['jitterBufferDelay', 'Video buffer'],
+            ['jitterBufferTargetDelay', 'Video buffer target'], ['jitterBufferMinimumDelay', 'Video buffer minimum']]) {
+            if (stat[field] != null) array.push(`${label}: ${(1000 * (stat[field] - (previous?.[field] ?? 0)) / frames).toFixed(1)} ms`);
+          }
+        }
+        const decoded = stat.framesDecoded - (previous?.framesDecoded ?? 0);
+        if (decoded > 0 && stat.totalDecodeTime != null)
+          array.push(`Decode: ${(1000 * (stat.totalDecodeTime - (previous?.totalDecodeTime ?? 0)) / decoded).toFixed(1)} ms`);
+        if (decoded > 0 && stat.totalProcessingDelay != null)
+          array.push(`Receive to decoded: ${(1000 * (stat.totalProcessingDelay - (previous?.totalProcessingDelay ?? 0)) / decoded).toFixed(1)} ms`);
+        array.push(`Frames dropped: ${stat.framesDropped ?? 0}; freezes: ${stat.freezeCount ?? 0}`);
       }
 
       if (lastReport && lastReport.has(stat.id)) {
@@ -114,6 +128,11 @@ export function createDisplayStringArray(report, lastReport, audioElement) {
         array.push(`Bitrate: ${bitrate.toFixed(2)} kbit/sec`);
       }
     }
+  });
+
+  report.forEach(stat => {
+    if (stat.type === 'candidate-pair' && stat.state === 'succeeded' && stat.nominated && stat.currentRoundTripTime != null)
+      array.push(`Network RTT: ${(stat.currentRoundTripTime * 1000).toFixed(1)} ms`);
   });
 
   return array;

@@ -4,6 +4,8 @@ import { VideoPlayer } from "../../js/videoplayer.js";
 import { RenderStreaming } from "../../module/renderstreaming.js";
 import { Signaling, WebSocketSignaling } from "../../module/signaling.js";
 import { createRnnoiseProcessor } from "./rnnoise.js";
+import { installLatencyProbe } from "../../js/latencyprobe.js";
+import { configureVideoReceiver, getVideoJitterBufferTarget } from "../../js/receiverlatency.js";
 
 /** @type {RenderStreaming} */
 let renderstreaming;
@@ -55,6 +57,10 @@ const usernameInput = document.getElementById('usernameInput');
 const micCheck = document.getElementById('micCheck');
 const audioSelect = document.querySelector('select#audioSource');
 const videoPlayer = new VideoPlayer();
+if (new URLSearchParams(window.location.search).has('latencyProbe')) {
+  installLatencyProbe(videoPlayer, connectedTools,
+    () => renderstreaming?._peer?.pc.getReceivers() ?? []);
+}
 const INPUT_CHANNEL_LABEL = "input";
 const POINTER_LOCK_CONTROL_CHANNEL_LABEL = "pointer-lock-control";
 const GREEN_ROOM_CHANNEL_LABEL = "green-room";
@@ -438,6 +444,7 @@ async function setupRenderStreaming() {
 }
 
 function onRemoteTrack(data) {
+  configureVideoReceiver(data.receiver, getVideoJitterBufferTarget(window.RENDER_STREAMING_CONFIG));
   videoPlayer.addTrack(data.track);
   if (data.track && data.track.kind === 'video') {
     clearMediaStartTimeout();
