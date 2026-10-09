@@ -353,7 +353,7 @@ export class Sender extends LocalInputManager {
     }
   }
 
-  _captureCameraPointerLock() {
+  _captureCameraPointerLock(unadjustedMovement = true) {
     if (document.pointerLockElement) {
       // Riding someone else's lock means leaving it alone when the camera mode ends.
       this._cameraOwnedPointerLock = document.pointerLockElement === this._elem &&
@@ -368,10 +368,16 @@ export class Sender extends LocalInputManager {
     const token = this._pointerLockRequest = {};
     let request;
     try {
-      request = this._elem.requestPointerLock();
-    } catch {
+      // Raw relative input avoids OS acceleration and cursor-recentering jumps on
+      // fast turns. Keep ordinary pointer lock for platforms without raw input.
+      request = unadjustedMovement
+        ? this._elem.requestPointerLock({ unadjustedMovement: true })
+        : this._elem.requestPointerLock();
+    } catch (error) {
       this._pointerLockRequest = null;
       this._cameraOwnedPointerLock = false;
+      if (unadjustedMovement && error?.name === 'NotSupportedError' && this._wantsCameraPointerLock())
+        this._captureCameraPointerLock(false);
       return;
     }
     if (request && request.catch) {
@@ -380,10 +386,12 @@ export class Sender extends LocalInputManager {
         this._pointerLockRequest = null;
         this._cameraOwnedPointerLock = document.pointerLockElement === this._elem;
         if (!this._wantsCameraPointerLock()) this._releaseCameraPointerLock();
-      }).catch(() => {
+      }).catch(error => {
         if (this._pointerLockRequest !== token) return;
         this._pointerLockRequest = null;
         this._cameraOwnedPointerLock = document.pointerLockElement === this._elem;
+        if (unadjustedMovement && error?.name === 'NotSupportedError' && this._wantsCameraPointerLock())
+          this._captureCameraPointerLock(false);
       });
     } else {
       this._pointerLockRequest = null;
