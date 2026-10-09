@@ -5,6 +5,7 @@ const INPUT_HEALTH_PROBE = 'URS_INPUT_HEALTH';
 const INPUT_READY = 'URS_INPUT_READY';
 const INPUT_NEEDS_BOOTSTRAP = 'URS_INPUT_NEEDS_BOOTSTRAP';
 const INPUT_HEALTH_INTERVAL_MS = 1000;
+const KEYBOARD_CAPTURE_HINT_MS = 8000;
 
 function getBasePath() {
   const globalConfig = window.RENDER_STREAMING_CONFIG || {};
@@ -39,6 +40,7 @@ export class VideoPlayer {
     this._onVisibilityChangeHandler = this._onVisibilityChange.bind(this);
     this._keyboardLockRequest = null;
     this._keyboardCaptureButton = null;
+    this._keyboardCaptureHintTimer = null;
   }
 
   /**
@@ -93,8 +95,7 @@ export class VideoPlayer {
     this._keyboardCaptureButton.type = 'button';
     this._keyboardCaptureButton.className = 'keyboard-capture-retry';
     this._keyboardCaptureButton.hidden = true;
-    this._keyboardCaptureButton.textContent = 'Esc will release the cursor. Click to retry keyboard capture.';
-    this._keyboardCaptureButton.addEventListener('click', () => this._lockKeyboardMovementKeys());
+    this._keyboardCaptureButton.addEventListener('click', event => this._onKeyboardCaptureClick(event));
     this.playerElement.appendChild(this._keyboardCaptureButton);
 
     document.addEventListener('webkitfullscreenchange', this._onFullscreenChangeHandler);
@@ -244,7 +245,8 @@ export class VideoPlayer {
 
   _mouseClickFullScreen() {
     // A denied entry request can be retried under this fresh user gesture.
-    this._lockKeyboardMovementKeys();
+    // Ordinary game clicks must not keep bringing back a dismissed/expired hint.
+    this._lockKeyboardMovementKeys(false);
     // Restores pointer lock when we unfocus the fullscreen player and click on it again
     this.sender?.setManualPointerLock(this.lockMouseCheck.checked);
   }
@@ -305,13 +307,38 @@ export class VideoPlayer {
     this.sender.releaseAllInputs();
   }
 
-  _lockKeyboardMovementKeys() {
+  _onKeyboardCaptureClick(event) {
+    event.stopPropagation();
+    this._hideKeyboardCaptureHint();
+    if (navigator.keyboard && typeof navigator.keyboard.lock === 'function') {
+      this._lockKeyboardMovementKeys();
+    }
+    this.videoElement?.focus();
+  }
+
+  _showKeyboardCaptureHint(message) {
+    this._hideKeyboardCaptureHint();
+    if (!this._keyboardCaptureButton) return;
+    this._keyboardCaptureButton.textContent = message;
+    this._keyboardCaptureButton.hidden = false;
+    this._keyboardCaptureHintTimer = setTimeout(() => this._hideKeyboardCaptureHint(), KEYBOARD_CAPTURE_HINT_MS);
+  }
+
+  _hideKeyboardCaptureHint() {
+    if (this._keyboardCaptureHintTimer !== null) {
+      clearTimeout(this._keyboardCaptureHintTimer);
+      this._keyboardCaptureHintTimer = null;
+    }
+    if (this._keyboardCaptureButton) this._keyboardCaptureButton.hidden = true;
+  }
+
+  _lockKeyboardMovementKeys(showFailure = true) {
     if (this._keyboardLockRequest) return;
     if (!navigator.keyboard || typeof navigator.keyboard.lock !== 'function') {
-      if (this._keyboardCaptureButton) {
-        this._keyboardCaptureButton.textContent = 'This browser cannot capture Esc; it will release the cursor.';
-        this._keyboardCaptureButton.disabled = true;
-        this._keyboardCaptureButton.hidden = false;
+      if (showFailure) {
+        this._showKeyboardCaptureHint(window.isSecureContext === false
+          ? 'Esc exits fullscreen immediately. Open this page over HTTPS to enable keyboard capture. Click to dismiss.'
+          : 'Esc exits fullscreen immediately. In Brave, allow keyboard access in Shields for this site, then reload. Otherwise try Chrome or Edge. Click to dismiss.');
       }
       return;
     }
@@ -331,13 +358,14 @@ export class VideoPlayer {
     ]);
     const request = this._keyboardLockRequest;
     request.then(() => {
-      if (this._keyboardLockRequest === request && this._keyboardCaptureButton)
-        this._keyboardCaptureButton.hidden = true;
+      if (this._keyboardLockRequest === request) this._hideKeyboardCaptureHint();
     }, error => {
       if (this._keyboardLockRequest !== request) return;
       this._keyboardLockRequest = null;
-      if (this._keyboardCaptureButton) this._keyboardCaptureButton.hidden = false;
-      console.warn('Chrome did not grant keyboard capture; Escape remains a browser shortcut.', error);
+      if (showFailure) {
+        this._showKeyboardCaptureHint('Esc exits fullscreen immediately. Keyboard capture was blocked; check this site\'s browser permissions, then click to retry.');
+      }
+      console.warn('The browser did not grant keyboard capture; Escape remains a browser shortcut.', error);
     });
   }
 
@@ -346,7 +374,7 @@ export class VideoPlayer {
       navigator.keyboard.unlock();
     }
     this._keyboardLockRequest = null;
-    if (this._keyboardCaptureButton) this._keyboardCaptureButton.hidden = true;
+    this._hideKeyboardCaptureHint();
   }
 
   /**
