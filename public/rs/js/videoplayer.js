@@ -23,6 +23,7 @@ export class VideoPlayer {
     this._playbackRequest = 0;
     this.inputRemoting = null;
     this.sender = null;
+    this._pendingApplicationPointerLock = null;
     this.inputObserver = null;
     this.inputSenderChannel = null;
     this.inputHealthTimer = null;
@@ -275,36 +276,12 @@ export class VideoPlayer {
   }
 
   _shouldCaptureKeyboardInput() {
-    if (!this.videoElement || !this.playerElement) {
-      return false;
-    }
-    const pointerLockElement = document.pointerLockElement
-      || document.webkitPointerLockElement
-      || document.mozPointerLockElement;
-    if (pointerLockElement === this.videoElement
-      || pointerLockElement === this.playerElement
-      || (pointerLockElement != null && this.playerElement.contains(pointerLockElement))) {
-      return true;
-    }
-    const activeElement = document.activeElement;
-    if (activeElement === this.videoElement || activeElement === this.playerElement) {
-      return true;
-    }
-    const fullscreenElement = document.fullscreenElement
-      || document.webkitFullscreenElement
-      || document.mozFullScreenElement;
-    if (fullscreenElement === this.playerElement
-      || (fullscreenElement != null && this.playerElement.contains(fullscreenElement))) {
-      return true;
-    }
-    return false;
+    return this.sender?.inputCaptured === true;
   }
 
   _releaseCapturedInputs() {
-    if (!this.sender || typeof this.sender.releaseAllInputs !== 'function') {
-      return;
-    }
-    this.sender.releaseAllInputs();
+    this.sender?.releaseInputCapture();
+    this._unlockKeyboardMovementKeys();
   }
 
   _onKeyboardCaptureClick(event) {
@@ -333,6 +310,7 @@ export class VideoPlayer {
   }
 
   _lockKeyboardMovementKeys(showFailure = true) {
+    if (!this._shouldCaptureKeyboardInput()) return;
     if (this._keyboardLockRequest) return;
     if (!navigator.keyboard || typeof navigator.keyboard.lock !== 'function') {
       if (showFailure) {
@@ -462,6 +440,7 @@ export class VideoPlayer {
     }
     this.inputRemoting = null;
     this.sender = null;
+    this._pendingApplicationPointerLock = null;
     if (this.inputObserver) {
       this.inputObserver.setChannel(null);
     }
@@ -505,6 +484,11 @@ export class VideoPlayer {
 
     if (!this.sender) {
       this.sender = new Sender(this.videoElement);
+      this.sender.onInputCaptureChanged = (captured, pointer) => {
+        if (captured && document.fullscreenElement) this._lockKeyboardMovementKeys(false);
+        else if (!captured) this._unlockKeyboardMovementKeys();
+        this.onInputCaptureChanged?.(captured, pointer);
+      };
       this.sender.addMouse();
       this.sender.addKeyboard();
       this.sender.setAltAsControlFallback(true);
@@ -516,6 +500,12 @@ export class VideoPlayer {
       this.inputRemoting = new InputRemoting(this.sender);
       this.inputObserver = new Observer(channel);
       this.inputRemoting.subscribe(this.inputObserver);
+      // Control and input channels can arrive in either order.
+      const pendingPointerLock = this._pendingApplicationPointerLock;
+      this._pendingApplicationPointerLock = null;
+      if (pendingPointerLock) {
+        this.sender.setApplicationPointerLock(...pendingPointerLock);
+      }
     } else if (this.inputObserver) {
       if (typeof this.inputObserver.setChannel === 'function') {
         this.inputObserver.setChannel(channel);
@@ -536,9 +526,11 @@ export class VideoPlayer {
     }
   }
 
-  setApplicationPointerLock(active, manipulationEnabled = false) {
+  setApplicationPointerLock(active, manipulationEnabled = false, virtualPointer = false) {
     if (this.sender) {
-      this.sender.setApplicationPointerLock(active, manipulationEnabled);
+      this.sender.setApplicationPointerLock(active, manipulationEnabled, virtualPointer);
+    } else {
+      this._pendingApplicationPointerLock = [active, manipulationEnabled, virtualPointer];
     }
   }
 
@@ -597,6 +589,7 @@ export class VideoPlayer {
   }
 
   _onCloseInputSenderChannel() {
+    this._releaseCapturedInputs();
     this._stopInputHealthChecks();
     this.inputReady = false;
     if (!this.inputRemoting) {

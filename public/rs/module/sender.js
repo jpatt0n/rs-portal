@@ -11,6 +11,7 @@ import {
 
 import { LocalInputManager, MessageType } from "./inputremoting.js";
 import { GamepadHandler } from "./gamepadhandler.js";
+import { TouchPhase } from "./touchphase.js";
 import { PointerCorrector } from "./pointercorrect.js";
 
 /**
@@ -41,12 +42,16 @@ export class Sender extends LocalInputManager {
     this._loggedMouseEvent = false;
     this._loggedKeyEvent = false;
     this._pressedKeys = new Set();
+    this._inputCaptured = false;
+    this.onInputCaptureChanged = null;
     this._altAsControlFallback = false;
     this._mouseSensitivity = 1;
     this._handheldMirror = false;
     this._applicationPointerLock = false;
     this._cameraOwnedPointerLock = false;
     this._manualPointerLock = false;
+    this._virtualPointer = false;
+    this._cursorBeforeVirtual = null;
     this._pointerLockRequest = null;
     this._manipulationEnabled = false;
     this._manipulationAnchor = null;
@@ -69,6 +74,14 @@ export class Sender extends LocalInputManager {
     this._onVisibilityChangeHandler = this._onVisibilityChange.bind(this);
     this._onPointerLockChangeHandler = this._onPointerLockChange.bind(this);
     document.addEventListener('pointerlockchange', this._onPointerLockChangeHandler, false);
+    this._onOutsidePressHandler = event => {
+      if (event.target !== this._elem) this.releaseInputCapture();
+    };
+    document.addEventListener('pointerdown', this._onOutsidePressHandler, true);
+    this._onFocusInHandler = event => {
+      if (event.target !== this._elem && event.target !== document.body) this.releaseInputCapture();
+    };
+    document.addEventListener('focusin', this._onFocusInHandler, true);
 
     //since line 27 cannot complete resize initialization but can only monitor div dimension changes, line 26 needs to be reserved
     this._elem.addEventListener('resize', this._onResizeEventHandler, false);
@@ -184,7 +197,34 @@ export class Sender extends LocalInputManager {
       this._elem
     );
   }
+  get inputCaptured() { return this._inputCaptured; }
+
+  acquireInputCapture(clientPosition = null) {
+    if (this._inputCaptured || document.visibilityState === 'hidden' || !document.hasFocus()) return;
+    // Capture the click before focus/pointer lock can recenter the browser mouse.
+    const pixels = clientPosition && this._corrector.isReady ? this._corrector.map(clientPosition) : null;
+    const pointer = pixels ? [pixels[0] / this._elem.videoWidth, pixels[1] / this._elem.videoHeight] : undefined;
+    this._inputCaptured = true;
+    this._elem.focus?.({ preventScroll: true });
+    this._setVirtualPointer(this._virtualPointer);
+    this.onInputCaptureChanged?.(true, pointer);
+    if (this._wantsCameraPointerLock()) this._captureCameraPointerLock();
+  }
+
+  releaseInputCapture() {
+    const captured = this._inputCaptured;
+    this._inputCaptured = false;
+    this.releaseAllInputs();
+    this._setVirtualPointer(this._virtualPointer);
+    this._releaseCameraPointerLock();
+    if (captured) this.onInputCaptureChanged?.(false);
+  }
+
   _onMouseEvent(event) {
+    if (!this._inputCaptured) {
+      if (event.type === 'click' && event.button === 0) this.acquireInputCapture([event.clientX, event.clientY]);
+      return; // Consume the click that acquires the game view.
+    }
     if (!this._corrector.isReady) {
       return;
     }
@@ -200,11 +240,12 @@ export class Sender extends LocalInputManager {
       this._loggedMouseEvent = true;
     }
     this.mouse.queueEvent(event);
-    // Every mouse delta is scaled, not just right-drag ones. Delta is only ever read as camera
-    // movement, and the application now has camera modes - the handheld camera above all - that pan
-    // without a button held; those have to answer the same speed setting as a right-drag does.
+    // Pointer movement and Q/E manipulation use video pixels. Camera modes retain the
+    // viewer's sensitivity, including handheld movement without a mouse button held.
     if (event.type === 'mousemove') {
-      this.mouse.currentState.delta = this._isManipulatingPointer()
+      const pointerPixels = this._isManipulatingPointer() || (this._virtualPointer &&
+        !this._applicationPointerLock && !this._handheldMirror);
+      this.mouse.currentState.delta = pointerPixels
         ? this._corrector.mapDelta(this.mouse.currentState.delta)
         : this.mouse.currentState.delta.map(value => value * this._mouseSensitivity);
     }
@@ -214,6 +255,7 @@ export class Sender extends LocalInputManager {
     this._queueStateEvent(this.mouse.currentState, this.mouse);
   }
   _onKeyEvent(event) {
+    if (!this._inputCaptured) return;
     // Alt-Tab can leave a keydown arriving after blur, with its keyup going to another app.
     // Release edges remain safe to deliver; background presses must not restart a hold.
     if (event.type === 'keydown' &&
@@ -312,11 +354,12 @@ export class Sender extends LocalInputManager {
     this._captureCameraPointerLock();
   }
 
-  /** Applies Unity's authoritative per-player crosshair/handheld cursor state. */
-  setApplicationPointerLock(active, manipulationEnabled = false) {
+  /** Unity renders and positions the virtual pointer; the browser supplies relative input. */
+  setApplicationPointerLock(active, manipulationEnabled = false, virtualPointer = false) {
     this._applicationPointerLock = active === true;
     if (!this._applicationPointerLock) this._handheldMirror = false;
     this._manipulationEnabled = manipulationEnabled === true;
+    this._setVirtualPointer(virtualPointer === true);
     this._updateManipulationPointerLock();
     if (this._wantsCameraPointerLock()) {
       this._captureCameraPointerLock();
@@ -326,7 +369,26 @@ export class Sender extends LocalInputManager {
   }
 
   _wantsCameraPointerLock() {
-    return this._manualPointerLock || this._handheldMirror || this._applicationPointerLock || this._isManipulatingPointer();
+    return this._inputCaptured && (this._manualPointerLock || this._handheldMirror || this._applicationPointerLock ||
+      this._virtualPointer || this._isManipulatingPointer());
+  }
+
+  _setVirtualPointer(active) {
+    this._virtualPointer = active;
+    // Scope native cursor presentation to this video, including after capture is lost.
+    if (!this._elem.style) return;
+    if (active && this._inputCaptured && !this._cursorBeforeVirtual) {
+      this._cursorBeforeVirtual = {
+        value: this._elem.style.getPropertyValue('cursor'),
+        priority: this._elem.style.getPropertyPriority('cursor')
+      };
+      this._elem.style.setProperty('cursor', 'none', 'important');
+    } else if ((!active || !this._inputCaptured) && this._cursorBeforeVirtual) {
+      const { value, priority } = this._cursorBeforeVirtual;
+      if (value) this._elem.style.setProperty('cursor', value, priority);
+      else this._elem.style.removeProperty('cursor');
+      this._cursorBeforeVirtual = null;
+    }
   }
 
   /** The optional mouse-lock setting shares the application's capture owner. */
@@ -354,6 +416,7 @@ export class Sender extends LocalInputManager {
   }
 
   _captureCameraPointerLock(unadjustedMovement = true) {
+    if (!this._inputCaptured) return;
     if (document.pointerLockElement) {
       // Riding someone else's lock means leaving it alone when the camera mode ends.
       this._cameraOwnedPointerLock = document.pointerLockElement === this._elem &&
@@ -418,24 +481,25 @@ export class Sender extends LocalInputManager {
   _onPointerLockChange() {
     if (document.pointerLockElement) {
       // All player capture paths target this video, including the manual setting.
-      if (document.pointerLockElement === this._elem) this._cameraOwnedPointerLock = true;
+      if (document.pointerLockElement === this._elem) {
+        this._cameraOwnedPointerLock = true;
+        if (!this._inputCaptured) this._releaseCameraPointerLock();
+      }
       return;
     }
-    const cameraWasLocked = this._cameraOwnedPointerLock &&
-      (this._applicationPointerLock || this._handheldMirror);
+    const applicationWasLocked = this._cameraOwnedPointerLock &&
+      (this._applicationPointerLock || this._handheldMirror || this._virtualPointer);
     this._cameraOwnedPointerLock = false;
     if (this._expectedPointerUnlock) {
       this._expectedPointerUnlock = false;
       return;
     }
-    this.releaseAllInputs();
-    if (!cameraWasLocked || this._escapeForwardedDuringPointerLock) {
-      return;
+    if (applicationWasLocked && !this._escapeForwardedDuringPointerLock && this._inputCaptured) {
+      // Chrome may consume Escape before delivering a keyboard event.
+      this._handheldMirror = false;
+      this._sendKeyTap('Escape');
     }
-    // Chrome can consume Escape to unlock without delivering a keyboard event. Forward that
-    // exit for every camera mode, including the camera cursor, through the normal input route.
-    this._handheldMirror = false;
-    this._sendKeyTap('Escape');
+    this.releaseInputCapture();
   }
 
   _sendKeyTap(code) {
@@ -476,6 +540,15 @@ export class Sender extends LocalInputManager {
       || event.key === 'Delete';
   }
   _onTouchEvent(event) {
+    if (!this._inputCaptured) {
+      if (event.type === 'touchend' && event.touches.length === 0) {
+        event.preventDefault(); // Consume the compatibility mouse click from this acquisition tap.
+        const touch = event.changedTouches[0];
+        this.acquireInputCapture([touch.clientX, touch.clientY]);
+      }
+      return;
+    }
+    if (event.type === 'click') return; // Mouse compatibility event, not a second touch.
     if (!this._corrector.isReady) {
       return;
     }
@@ -497,6 +570,7 @@ export class Sender extends LocalInputManager {
         break;
       }
       case 'gamepadupdated': {
+        if (!this._inputCaptured) return;
         this.gamepad.queueEvent(event);
         this._queueStateEvent(this.gamepad.currentState, this.gamepad);
         break;
@@ -505,21 +579,19 @@ export class Sender extends LocalInputManager {
   }
 
   _onWindowBlur() {
-    this.releaseAllInputs();
+    this.releaseInputCapture();
   }
 
   _onWindowFocus() {
-    // Reconcile the remote keyboard after a keyup/blur that never reached the page or host.
-    this.releaseAllInputs();
+    this.releaseInputCapture();
   }
 
   _onPageHide() {
-    this.releaseAllInputs();
+    this.releaseInputCapture();
   }
 
   _onVisibilityChange() {
-    // Tab visibility changes need the same reconciliation when hiding and returning.
-    this.releaseAllInputs();
+    this.releaseInputCapture();
   }
 
   _releaseAllKeys() {
@@ -561,15 +633,39 @@ export class Sender extends LocalInputManager {
   releaseAllInputs() {
     this._releaseAllKeys();
     this._releaseMouseButtons();
+    const pad = this.gamepad?.currentState;
+    if (pad) {
+      new Uint8Array(pad.buttons).fill(0);
+      pad.leftStick = [0, 0];
+      pad.rightStick = [0, 0];
+      pad.leftTrigger = pad.rightTrigger = 0;
+      this._queueStateEvent(pad, this.gamepad);
+    }
+    const touches = this.touchscreen?.currentState?.touchData;
+    if (touches) {
+      for (const touch of touches) {
+        if (touch.phaseId === TouchPhase.Ended || touch.phaseId === TouchPhase.Canceled) continue;
+        const canceled = touch.copy();
+        canceled.phaseId = TouchPhase.Canceled;
+        canceled.delta = [0, 0];
+        canceled.pressure = 0;
+        canceled.position = this._corrector.map(canceled.position);
+        this._queueStateEvent(canceled, this.touchscreen);
+      }
+      touches.length = 0;
+    }
     this._updateManipulationPointerLock();
   }
 
   dispose() {
-    this.releaseAllInputs();
+    this.releaseInputCapture();
     this._applicationPointerLock = false;
     this._manualPointerLock = false;
+    this._setVirtualPointer(false);
     this._releaseHandheldPointerLock();
     document.removeEventListener('pointerlockchange', this._onPointerLockChangeHandler, false);
+    document.removeEventListener('pointerdown', this._onOutsidePressHandler, true);
+    document.removeEventListener('focusin', this._onFocusInHandler, true);
     this._elem.removeEventListener('resize', this._onResizeEventHandler, false);
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
