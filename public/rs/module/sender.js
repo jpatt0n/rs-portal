@@ -50,13 +50,11 @@ export class Sender extends LocalInputManager {
     this._applicationPointerLock = false;
     this._cameraOwnedPointerLock = false;
     this._manualPointerLock = false;
-    this._virtualPointer = false;
-    this._cursorBeforeVirtual = null;
     this._pointerLockRequest = null;
     this._manipulationEnabled = false;
-    this._manipulationAnchor = null;
+    this._cameraDragEnabled = false;
+    this._pointerLockAnchor = null;
     this._expectedPointerUnlock = false;
-    this._escapeForwardedDuringPointerLock = false;
     this._corrector = new PointerCorrector(
       this._elem.videoWidth,
       this._elem.videoHeight,
@@ -79,7 +77,8 @@ export class Sender extends LocalInputManager {
     };
     document.addEventListener('pointerdown', this._onOutsidePressHandler, true);
     this._onFocusInHandler = event => {
-      if (event.target !== this._elem && event.target !== document.body) this.releaseInputCapture();
+      if (event.target === this._elem) this.acquireInputCapture();
+      else this.releaseInputCapture();
     };
     document.addEventListener('focusin', this._onFocusInHandler, true);
 
@@ -199,31 +198,39 @@ export class Sender extends LocalInputManager {
   }
   get inputCaptured() { return this._inputCaptured; }
 
+  syncInputFocus() {
+    if (document.visibilityState !== 'hidden' && document.hasFocus() && document.activeElement === this._elem)
+      this.acquireInputCapture();
+    else this.releaseInputCapture();
+  }
+
   acquireInputCapture(clientPosition = null) {
     if (this._inputCaptured || document.visibilityState === 'hidden' || !document.hasFocus()) return;
-    // Capture the click before focus/pointer lock can recenter the browser mouse.
     const pixels = clientPosition && this._corrector.isReady ? this._corrector.map(clientPosition) : null;
-    const pointer = pixels ? [pixels[0] / this._elem.videoWidth, pixels[1] / this._elem.videoHeight] : undefined;
     this._inputCaptured = true;
     this._elem.focus?.({ preventScroll: true });
-    this._setVirtualPointer(this._virtualPointer);
-    this.onInputCaptureChanged?.(true, pointer);
-    if (this._wantsCameraPointerLock()) this._captureCameraPointerLock();
+    // Focus precedes device packets on the same ordered input channel. The first press
+    // is delivered normally; this neutral snapshot establishes its absolute position.
+    this.onInputCaptureChanged?.(true);
+    if (pixels && this.mouse) {
+      this.mouse.queueEvent({ type: 'mousemove', clientX: pixels[0], clientY: pixels[1],
+        movementX: 0, movementY: 0, buttons: 0 });
+      this._queueStateEvent(this.mouse.currentState, this.mouse);
+    }
   }
 
   releaseInputCapture() {
     const captured = this._inputCaptured;
     this._inputCaptured = false;
     this.releaseAllInputs();
-    this._setVirtualPointer(this._virtualPointer);
     this._releaseCameraPointerLock();
     if (captured) this.onInputCaptureChanged?.(false);
   }
 
   _onMouseEvent(event) {
     if (!this._inputCaptured) {
-      if (event.type === 'click' && event.button === 0) this.acquireInputCapture([event.clientX, event.clientY]);
-      return; // Consume the click that acquires the game view.
+      if (event.type === 'mousedown') this.acquireInputCapture([event.clientX, event.clientY]);
+      if (!this._inputCaptured) return;
     }
     if (!this._corrector.isReady) {
       return;
@@ -233,28 +240,35 @@ export class Sender extends LocalInputManager {
       event.preventDefault();
       event.stopPropagation();
     }
-    if ((event.type === 'mousedown' || event.type === 'click') && this._wantsCameraPointerLock()) {
-      this._captureCameraPointerLock();
-    }
     if (!this._loggedMouseEvent) {
       this._loggedMouseEvent = true;
     }
+    const heldButtons = this.mouse.currentState?.buttons;
     this.mouse.queueEvent(event);
+    // Raw pointer-lock movement can report buttons=0 even while a button is held.
+    // Button edges own the hold during capture; movement/wheel/click packets cannot
+    // cancel it. Focus loss still sends a neutral snapshot through releaseAllInputs.
+    if (this._pointerLockAnchor && heldButtons &&
+        event.type !== 'mousedown' && event.type !== 'mouseup')
+      this.mouse.currentState.buttons = heldButtons;
     // Pointer movement and Q/E manipulation use video pixels. Camera modes retain the
     // viewer's sensitivity, including handheld movement without a mouse button held.
     if (event.type === 'mousemove') {
-      const pointerPixels = this._isManipulatingPointer() || (this._virtualPointer &&
-        !this._applicationPointerLock && !this._handheldMirror);
+      const pointerPixels = this._isManipulatingPointer() && !this._isCameraDrag() &&
+        !this._applicationPointerLock && !this._handheldMirror;
       this.mouse.currentState.delta = pointerPixels
         ? this._corrector.mapDelta(this.mouse.currentState.delta)
         : this.mouse.currentState.delta.map(value => value * this._mouseSensitivity);
     }
     // Wheel packets replace the full mouse state too, so every event must use video coordinates.
-    this.mouse.currentState.position = this._manipulationAnchor
-      ? [...this._manipulationAnchor] : this._corrector.map(this.mouse.currentState.position);
+    this.mouse.currentState.position = this._pointerLockAnchor
+      ? [...this._pointerLockAnchor] : this._corrector.map(this.mouse.currentState.position);
     this._queueStateEvent(this.mouse.currentState, this.mouse);
+    // Request inside the initiating button gesture, after recording its real position.
+    if (event.type === 'mousedown' || event.type === 'mouseup') this._updatePointerLock();
   }
   _onKeyEvent(event) {
+    if (!this._inputCaptured && event.type === 'keydown') this.syncInputFocus();
     if (!this._inputCaptured) return;
     // Alt-Tab can leave a keydown arriving after blur, with its keyup going to another app.
     // Release edges remain safe to deliver; background presses must not restart a hold.
@@ -275,14 +289,10 @@ export class Sender extends LocalInputManager {
     if(event.type == 'keydown') {
       if(!event.repeat) { // StateEvent
         this._pressedKeys.add(code);
-        this._updateManipulationPointerLock();
+        if (code === 'KeyQ' || code === 'KeyE') this._updatePointerLock();
         this.keyboard.queueEvent({ type: 'keydown', code: code });
         this._queueStateEvent(this.keyboard.currentState, this.keyboard);
         this._updateHandheldMirror(event);
-        // Unity owns the two-press confirmation. Keep capture while its hint is visible, and
-        // remember delivery if Chrome subsequently reports an unlock for this same key.
-        if (code === 'Escape' && this._cameraOwnedPointerLock)
-          this._escapeForwardedDuringPointerLock = true;
         if (!this._loggedKeyEvent) {
           this._loggedKeyEvent = true;
         }
@@ -294,7 +304,7 @@ export class Sender extends LocalInputManager {
     }
     else if(event.type == 'keyup') {
       this._pressedKeys.delete(code);
-      this._updateManipulationPointerLock();
+      if (code === 'KeyQ' || code === 'KeyE') this._updatePointerLock();
       this.keyboard.queueEvent({ type: 'keyup', code: code });
       this._queueStateEvent(this.keyboard.currentState, this.keyboard);
     }
@@ -354,41 +364,18 @@ export class Sender extends LocalInputManager {
     this._captureCameraPointerLock();
   }
 
-  /** Unity renders and positions the virtual pointer; the browser supplies relative input. */
-  setApplicationPointerLock(active, manipulationEnabled = false, virtualPointer = false) {
+  /** Camera modes lock continuously; permitted Q/E gestures lock only while held. */
+  setApplicationPointerLock(active, manipulationEnabled = false, cameraDragEnabled = false) {
     this._applicationPointerLock = active === true;
     if (!this._applicationPointerLock) this._handheldMirror = false;
     this._manipulationEnabled = manipulationEnabled === true;
-    this._setVirtualPointer(virtualPointer === true);
-    this._updateManipulationPointerLock();
-    if (this._wantsCameraPointerLock()) {
-      this._captureCameraPointerLock();
-    } else {
-      this._releaseCameraPointerLock();
-    }
+    this._cameraDragEnabled = cameraDragEnabled === true;
+    this._updatePointerLock();
   }
 
   _wantsCameraPointerLock() {
     return this._inputCaptured && (this._manualPointerLock || this._handheldMirror || this._applicationPointerLock ||
-      this._virtualPointer || this._isManipulatingPointer());
-  }
-
-  _setVirtualPointer(active) {
-    this._virtualPointer = active;
-    // Scope native cursor presentation to this video, including after capture is lost.
-    if (!this._elem.style) return;
-    if (active && this._inputCaptured && !this._cursorBeforeVirtual) {
-      this._cursorBeforeVirtual = {
-        value: this._elem.style.getPropertyValue('cursor'),
-        priority: this._elem.style.getPropertyPriority('cursor')
-      };
-      this._elem.style.setProperty('cursor', 'none', 'important');
-    } else if ((!active || !this._inputCaptured) && this._cursorBeforeVirtual) {
-      const { value, priority } = this._cursorBeforeVirtual;
-      if (value) this._elem.style.setProperty('cursor', value, priority);
-      else this._elem.style.removeProperty('cursor');
-      this._cursorBeforeVirtual = null;
-    }
+      this._isManipulatingPointer() || this._isCameraDrag());
   }
 
   /** The optional mouse-lock setting shares the application's capture owner. */
@@ -402,17 +389,14 @@ export class Sender extends LocalInputManager {
     return this._manipulationEnabled && (this._pressedKeys.has('KeyQ') || this._pressedKeys.has('KeyE'));
   }
 
-  _updateManipulationPointerLock() {
-    if (this._isManipulatingPointer()) {
-      if (!this._manipulationAnchor && this.mouse?.currentState) {
-        this._manipulationAnchor = [...this.mouse.currentState.position];
-      }
-      // Called inside the trusted keydown: no network round trip before cursor capture.
-      this._captureCameraPointerLock();
-    } else {
-      this._manipulationAnchor = null;
-      if (!this._wantsCameraPointerLock()) this._releaseCameraPointerLock();
-    }
+  _isCameraDrag() {
+    return this._cameraDragEnabled && this.mouse?.currentState?.buttons &&
+      (new Uint16Array(this.mouse.currentState.buttons)[0] & 2) !== 0;
+  }
+
+  _updatePointerLock() {
+    if (this._wantsCameraPointerLock()) this._captureCameraPointerLock();
+    else this._releaseCameraPointerLock();
   }
 
   _captureCameraPointerLock(unadjustedMovement = true) {
@@ -427,7 +411,10 @@ export class Sender extends LocalInputManager {
       return;
     }
     this._cameraOwnedPointerLock = true;
-    this._escapeForwardedDuringPointerLock = false;
+    // One return point for right-drag, handheld, Q/E and manual lock. Never integrate
+    // relative camera motion into the absolute pointer or retain an offset after unlock.
+    if (!this._pointerLockAnchor && this.mouse?.currentState)
+      this._pointerLockAnchor = [...this.mouse.currentState.position];
     const token = this._pointerLockRequest = {};
     let request;
     try {
@@ -441,6 +428,7 @@ export class Sender extends LocalInputManager {
       this._cameraOwnedPointerLock = false;
       if (unadjustedMovement && error?.name === 'NotSupportedError' && this._wantsCameraPointerLock())
         this._captureCameraPointerLock(false);
+      else this._pointerLockAnchor = null;
       return;
     }
     if (request && request.catch) {
@@ -455,6 +443,7 @@ export class Sender extends LocalInputManager {
         this._cameraOwnedPointerLock = document.pointerLockElement === this._elem;
         if (unadjustedMovement && error?.name === 'NotSupportedError' && this._wantsCameraPointerLock())
           this._captureCameraPointerLock(false);
+        else if (!this._cameraOwnedPointerLock) this._pointerLockAnchor = null;
       });
     } else {
       this._pointerLockRequest = null;
@@ -476,6 +465,7 @@ export class Sender extends LocalInputManager {
       document.exitPointerLock();
     }
     this._cameraOwnedPointerLock = false;
+    if (!this._pointerLockRequest && document.pointerLockElement !== this._elem) this._pointerLockAnchor = null;
   }
 
   _onPointerLockChange() {
@@ -483,33 +473,20 @@ export class Sender extends LocalInputManager {
       // All player capture paths target this video, including the manual setting.
       if (document.pointerLockElement === this._elem) {
         this._cameraOwnedPointerLock = true;
-        if (!this._inputCaptured) this._releaseCameraPointerLock();
+        if (!this._wantsCameraPointerLock()) this._releaseCameraPointerLock();
       }
       return;
     }
-    const applicationWasLocked = this._cameraOwnedPointerLock &&
-      (this._applicationPointerLock || this._handheldMirror || this._virtualPointer);
     this._cameraOwnedPointerLock = false;
+    this._pointerLockAnchor = null;
     if (this._expectedPointerUnlock) {
       this._expectedPointerUnlock = false;
+      if (this._wantsCameraPointerLock()) this._captureCameraPointerLock();
       return;
     }
-    if (applicationWasLocked && !this._escapeForwardedDuringPointerLock && this._inputCaptured) {
-      // Chrome may consume Escape before delivering a keyboard event.
-      this._handheldMirror = false;
-      this._sendKeyTap('Escape');
-    }
+    // Forced browser unlock releases focus. It does not synthesize an Escape that
+    // could race the capture notification on another data channel.
     this.releaseInputCapture();
-  }
-
-  _sendKeyTap(code) {
-    if (!this.keyboard) {
-      return;
-    }
-    this.keyboard.queueEvent({ type: 'keydown', code: code });
-    this._queueStateEvent(this.keyboard.currentState, this.keyboard);
-    this.keyboard.queueEvent({ type: 'keyup', code: code });
-    this._queueStateEvent(this.keyboard.currentState, this.keyboard);
   }
 
   _resolveKeyCode(event) {
@@ -541,12 +518,11 @@ export class Sender extends LocalInputManager {
   }
   _onTouchEvent(event) {
     if (!this._inputCaptured) {
-      if (event.type === 'touchend' && event.touches.length === 0) {
-        event.preventDefault(); // Consume the compatibility mouse click from this acquisition tap.
+      if (event.type === 'touchstart') {
         const touch = event.changedTouches[0];
         this.acquireInputCapture([touch.clientX, touch.clientY]);
       }
-      return;
+      if (!this._inputCaptured) return;
     }
     if (event.type === 'click') return; // Mouse compatibility event, not a second touch.
     if (!this._corrector.isReady) {
@@ -583,7 +559,7 @@ export class Sender extends LocalInputManager {
   }
 
   _onWindowFocus() {
-    this.releaseInputCapture();
+    this.syncInputFocus();
   }
 
   _onPageHide() {
@@ -591,7 +567,7 @@ export class Sender extends LocalInputManager {
   }
 
   _onVisibilityChange() {
-    this.releaseInputCapture();
+    this.syncInputFocus();
   }
 
   _releaseAllKeys() {
@@ -654,14 +630,13 @@ export class Sender extends LocalInputManager {
       }
       touches.length = 0;
     }
-    this._updateManipulationPointerLock();
+    this._updatePointerLock();
   }
 
   dispose() {
     this.releaseInputCapture();
     this._applicationPointerLock = false;
     this._manualPointerLock = false;
-    this._setVirtualPointer(false);
     this._releaseHandheldPointerLock();
     document.removeEventListener('pointerlockchange', this._onPointerLockChangeHandler, false);
     document.removeEventListener('pointerdown', this._onOutsidePressHandler, true);

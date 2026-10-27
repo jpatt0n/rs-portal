@@ -484,10 +484,10 @@ export class VideoPlayer {
 
     if (!this.sender) {
       this.sender = new Sender(this.videoElement);
-      this.sender.onInputCaptureChanged = (captured, pointer) => {
+      this.sender.onInputCaptureChanged = (captured) => {
         if (captured && document.fullscreenElement) this._lockKeyboardMovementKeys(false);
         else if (!captured) this._unlockKeyboardMovementKeys();
-        this.onInputCaptureChanged?.(captured, pointer);
+        this._sendInputFocus(captured);
       };
       this.sender.addMouse();
       this.sender.addKeyboard();
@@ -526,12 +526,17 @@ export class VideoPlayer {
     }
   }
 
-  setApplicationPointerLock(active, manipulationEnabled = false, virtualPointer = false) {
+  setApplicationPointerLock(active, manipulationEnabled = false, cameraDragEnabled = false) {
     if (this.sender) {
-      this.sender.setApplicationPointerLock(active, manipulationEnabled, virtualPointer);
+      this.sender.setApplicationPointerLock(active, manipulationEnabled, cameraDragEnabled);
     } else {
-      this._pendingApplicationPointerLock = [active, manipulationEnabled, virtualPointer];
+      this._pendingApplicationPointerLock = [active, manipulationEnabled, cameraDragEnabled];
     }
+  }
+
+  _sendInputFocus(focused) {
+    if (this.inputSenderChannel?.readyState === 'open')
+      this.inputSenderChannel.send(focused ? 'URS_INPUT_FOCUS' : 'URS_INPUT_BLUR');
   }
 
   _setInputSenderChannel(channel) {
@@ -585,6 +590,11 @@ export class VideoPlayer {
       return;
     }
     this.inputRemoting.startSending();
+    // Joining gives the video normal keyboard focus. Rebinding an input channel must
+    // not steal it from the receiver's settings or another page control.
+    if (document.activeElement === document.body) this.videoElement.focus();
+    this.sender.syncInputFocus();
+    this._sendInputFocus(this.sender.inputCaptured);
     this._startInputHealthChecks(channel);
   }
 

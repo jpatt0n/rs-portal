@@ -57,10 +57,6 @@ const usernameInput = document.getElementById('usernameInput');
 const micCheck = document.getElementById('micCheck');
 const audioSelect = document.querySelector('select#audioSource');
 const videoPlayer = new VideoPlayer();
-videoPlayer.onInputCaptureChanged = (active, pointer) => {
-  if (pointerLockControlChannel?.readyState === 'open')
-    pointerLockControlChannel.send(JSON.stringify({ type: 'input-capture', active, pointer }));
-};
 if (new URLSearchParams(window.location.search).has('latencyProbe')) {
   installLatencyProbe(videoPlayer, connectedTools,
     () => renderstreaming?._peer?.pc.getReceivers() ?? []);
@@ -623,7 +619,6 @@ function createPointerLockControlChannel() {
   pointerLockControlChannel = channel;
   const onOpen = () => {
     clearPointerLockControlRecovery();
-    videoPlayer.onInputCaptureChanged(videoPlayer.sender?.inputCaptured === true);
   };
   const onInterrupted = () => {
     if (channel !== pointerLockControlChannel) {
@@ -657,10 +652,8 @@ function handlePointerLockControlMessage(raw) {
   try {
     const message = JSON.parse(raw);
     if (message.type === 'state') {
-      // Apply host capture release, including an otherwise unused Escape.
-      if (message.inputCaptured === false) videoPlayer._releaseCapturedInputs();
       videoPlayer.setApplicationPointerLock(message.active === true, message.manipulationEnabled === true,
-        message.virtualPointer === true);
+        message.cameraDragEnabled === true);
     }
   } catch {
     // Ignore malformed state from an obsolete or mismatched Unity peer.
