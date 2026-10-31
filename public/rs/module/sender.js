@@ -55,6 +55,7 @@ export class Sender extends LocalInputManager {
     this._cameraDragEnabled = false;
     this._pointerLockAnchor = null;
     this._expectedPointerUnlock = false;
+    this._dragPointerId = null;
     this._corrector = new PointerCorrector(
       this._elem.videoWidth,
       this._elem.videoHeight,
@@ -63,6 +64,28 @@ export class Sender extends LocalInputManager {
 
     this._onResizeEventHandler = this._onResizeEvent.bind(this);
     this._onMouseEventHandler = this._onMouseEvent.bind(this);
+    this._onOutsideMouseEventHandler = event => {
+      if (event.target !== this._elem && this._inputCaptured &&
+          (this._isManipulatingPointer() || this._hasMouseButtons())) this._onMouseEvent(event);
+    };
+    this._onDragPointerDownHandler = event => {
+      if (event.pointerType !== 'mouse' || document.pointerLockElement || !this._elem.setPointerCapture) return;
+      this._elem.setPointerCapture(event.pointerId);
+      this._dragPointerId = event.pointerId;
+    };
+    this._onDragPointerLostHandler = event => {
+      if (event.pointerId !== this._dragPointerId) return;
+      this._dragPointerId = null;
+      if (event.buttons) this.releaseInputCapture();
+    };
+    this._onDragPointerCancelHandler = () => this.releaseInputCapture();
+    this._onPagePointerLeaveHandler = () => {
+      // Keyboard-only manipulation cannot capture the pointer outside the page.
+      // Retire that gesture rather than leaving its edge continuation running.
+      if (this._dragPointerId === null && document.pointerLockElement !== this._elem &&
+          (this._isManipulatingPointer() || this._hasMouseButtons())) this.releaseInputCapture();
+    };
+    this._onVideoPointerEnterHandler = () => this.syncInputFocus();
     this._onKeyEventHandler = this._onKeyEvent.bind(this);
     this._onGamepadEventHandler = this._onGamepadEvent.bind(this);
     this._onTouchEventHandler = this._onTouchEvent.bind(this);
@@ -106,6 +129,15 @@ export class Sender extends LocalInputManager {
     this._elem.addEventListener('mouseup', this._onMouseEventHandler, false);
     this._elem.addEventListener('mousemove', this._onMouseEventHandler, false);
     this._elem.addEventListener('wheel', this._onMouseEventHandler, false);
+    this._elem.addEventListener('pointerdown', this._onDragPointerDownHandler, false);
+    this._elem.addEventListener('lostpointercapture', this._onDragPointerLostHandler, false);
+    this._elem.addEventListener('pointercancel', this._onDragPointerCancelHandler, false);
+    this._elem.addEventListener('mouseenter', this._onVideoPointerEnterHandler, false);
+    // Captured drags target the video; modifier-only motion outside it bubbles to
+    // the window. The target check prevents sending a video event twice.
+    window.addEventListener('mousemove', this._onOutsideMouseEventHandler, false);
+    window.addEventListener('mouseup', this._onOutsideMouseEventHandler, false);
+    document.addEventListener('mouseleave', this._onPagePointerLeaveHandler, false);
   }
 
   addKeyboard() {
@@ -222,6 +254,10 @@ export class Sender extends LocalInputManager {
   releaseInputCapture() {
     const captured = this._inputCaptured;
     this._inputCaptured = false;
+    const pointerId = this._dragPointerId;
+    this._dragPointerId = null;
+    if (pointerId !== null && this._elem.hasPointerCapture?.(pointerId))
+      this._elem.releasePointerCapture(pointerId);
     this.releaseAllInputs();
     this._releaseCameraPointerLock();
     if (captured) this.onInputCaptureChanged?.(false);
@@ -364,7 +400,7 @@ export class Sender extends LocalInputManager {
     this._captureCameraPointerLock();
   }
 
-  /** Camera modes lock continuously; permitted Q/E gestures lock only while held. */
+  /** Only handheld requests automatic lock. Gesture permissions still select delta scaling. */
   setApplicationPointerLock(active, manipulationEnabled = false, cameraDragEnabled = false) {
     this._applicationPointerLock = active === true;
     if (!this._applicationPointerLock) this._handheldMirror = false;
@@ -374,8 +410,7 @@ export class Sender extends LocalInputManager {
   }
 
   _wantsCameraPointerLock() {
-    return this._inputCaptured && (this._manualPointerLock || this._handheldMirror || this._applicationPointerLock ||
-      this._isManipulatingPointer() || this._isCameraDrag());
+    return this._inputCaptured && (this._manualPointerLock || this._handheldMirror || this._applicationPointerLock);
   }
 
   /** The optional mouse-lock setting shares the application's capture owner. */
@@ -392,6 +427,10 @@ export class Sender extends LocalInputManager {
   _isCameraDrag() {
     return this._cameraDragEnabled && this.mouse?.currentState?.buttons &&
       (new Uint16Array(this.mouse.currentState.buttons)[0] & 2) !== 0;
+  }
+
+  _hasMouseButtons() {
+    return this.mouse?.currentState?.buttons && new Uint16Array(this.mouse.currentState.buttons)[0] !== 0;
   }
 
   _updatePointerLock() {
@@ -651,6 +690,13 @@ export class Sender extends LocalInputManager {
     this._elem.removeEventListener('mouseup', this._onMouseEventHandler, false);
     this._elem.removeEventListener('mousemove', this._onMouseEventHandler, false);
     this._elem.removeEventListener('wheel', this._onMouseEventHandler, false);
+    this._elem.removeEventListener('pointerdown', this._onDragPointerDownHandler, false);
+    this._elem.removeEventListener('lostpointercapture', this._onDragPointerLostHandler, false);
+    this._elem.removeEventListener('pointercancel', this._onDragPointerCancelHandler, false);
+    this._elem.removeEventListener('mouseenter', this._onVideoPointerEnterHandler, false);
+    window.removeEventListener('mousemove', this._onOutsideMouseEventHandler, false);
+    window.removeEventListener('mouseup', this._onOutsideMouseEventHandler, false);
+    document.removeEventListener('mouseleave', this._onPagePointerLeaveHandler, false);
     this._elem.removeEventListener('touchend', this._onTouchEventHandler, false);
     this._elem.removeEventListener('touchstart', this._onTouchEventHandler, false);
     this._elem.removeEventListener('touchcancel', this._onTouchEventHandler, false);
