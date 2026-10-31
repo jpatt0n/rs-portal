@@ -29,7 +29,6 @@ export class VideoPlayer {
     this.inputHealthTimer = null;
     this.inputReady = false;
     this.mouseSensitivity = 1;
-    this._onMouseMoveHandler = this._mouseMove.bind(this);
     this._onMouseClickFullScreenHandler = this._mouseClickFullScreen.bind(this);
     this._onFullscreenChangeHandler = this._onFullscreenChange.bind(this);
     this._onOpenInputSenderChannelHandler = this._onOpenInputSenderChannel.bind(this);
@@ -220,19 +219,11 @@ export class VideoPlayer {
       this.sender?.setManualPointerLock(this.lockMouseCheck.checked);
 
       // Subscribe to events
-      document.addEventListener('mousemove', this._onMouseMoveHandler, false);
       document.addEventListener('click', this._onMouseClickFullScreenHandler, false);
     }
     else {
-      document.removeEventListener('mousemove', this._onMouseMoveHandler, false);
       document.removeEventListener('click', this._onMouseClickFullScreenHandler, false);
     }
-  }
-
-  _mouseMove(event) {
-    // The video listener already delivered events that bubble from the video. Only
-    // forward fullscreen motion outside it; otherwise relative look is sent twice.
-    if (event.target !== this.videoElement) this.sender?._onMouseEvent(event);
   }
 
   _mouseClick() {
@@ -484,6 +475,7 @@ export class VideoPlayer {
 
     if (!this.sender) {
       this.sender = new Sender(this.videoElement);
+      this.sender.onPointerScreenEdgeChanged = edge => this._sendPointerScreenEdge(edge);
       this.sender.onInputCaptureChanged = (captured) => {
         if (captured && document.fullscreenElement) this._lockKeyboardMovementKeys(false);
         else if (!captured) this._unlockKeyboardMovementKeys();
@@ -537,6 +529,11 @@ export class VideoPlayer {
   _sendInputFocus(focused) {
     if (this.inputSenderChannel?.readyState === 'open')
       this.inputSenderChannel.send(focused ? 'URS_INPUT_FOCUS' : 'URS_INPUT_BLUR');
+  }
+
+  _sendPointerScreenEdge(edge) {
+    if (this.inputSenderChannel?.readyState === 'open')
+      this.inputSenderChannel.send(`URS_POINTER_EDGE:${edge}`);
   }
 
   _setInputSenderChannel(channel) {
@@ -595,6 +592,7 @@ export class VideoPlayer {
     if (document.activeElement === document.body) this.videoElement.focus();
     this.sender.syncInputFocus();
     this._sendInputFocus(this.sender.inputCaptured);
+    this._sendPointerScreenEdge(this.sender.pointerScreenEdge);
     this._startInputHealthChecks(channel);
   }
 

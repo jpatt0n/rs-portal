@@ -34,6 +34,25 @@ const APP_CLAIMED_MODIFIER_DIGITS = new Set([
   'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4', 'Numpad5'
 ]);
 
+// Encode -1/0/+1 per Unity axis as a single digit; 4 means no screen edge.
+// Use screen coordinates, never the video rect or the browser's inner viewport.
+export function pointerScreenEdge(event, display = window.screen) {
+  if (!display || !(display.width > 0 && display.height > 0) ||
+      !Number.isFinite(event.screenX) || !Number.isFinite(event.screenY)) return 4;
+  const left = display.left ?? display.availLeft ?? 0;
+  const top = display.top ?? display.availTop ?? 0;
+  const axis = (position, start, size) => {
+    // Equality at the boundary matters: a cursor on an adjacent monitor is not
+    // pinned against this screen just because it lies beyond its bounds.
+    if (position >= start && position < start + 1) return -1;
+    if (position >= start + size - 1 && position < start + size) return 1;
+    return 0;
+  };
+  const x = axis(event.screenX, left, display.width);
+  const y = -axis(event.screenY, top, display.height);
+  return x + 1 + (y + 1) * 3;
+}
+
 export class Sender extends LocalInputManager {
   constructor(elem) {
     super();
@@ -44,6 +63,8 @@ export class Sender extends LocalInputManager {
     this._pressedKeys = new Set();
     this._inputCaptured = false;
     this.onInputCaptureChanged = null;
+    this.onPointerScreenEdgeChanged = null;
+    this.pointerScreenEdge = 4;
     this._altAsControlFallback = false;
     this._mouseSensitivity = 1;
     this._handheldMirror = false;
@@ -222,6 +243,7 @@ export class Sender extends LocalInputManager {
   }
 
   _onResizeEvent() {
+    this._setPointerScreenEdge(4);
     this._corrector.reset(
       this._elem.videoWidth,
       this._elem.videoHeight,
@@ -254,6 +276,7 @@ export class Sender extends LocalInputManager {
   releaseInputCapture() {
     const captured = this._inputCaptured;
     this._inputCaptured = false;
+    this._setPointerScreenEdge(4);
     const pointerId = this._dragPointerId;
     this._dragPointerId = null;
     if (pointerId !== null && this._elem.hasPointerCapture?.(pointerId))
@@ -271,6 +294,9 @@ export class Sender extends LocalInputManager {
     if (!this._corrector.isReady) {
       return;
     }
+    // Ordered before the device packet on the same input channel. Pointer lock
+    // holds screenX/Y constant, so it must never seed an unlocked edge fallback.
+    this._setPointerScreenEdge(document.pointerLockElement ? 4 : pointerScreenEdge(event));
     if ((event.type === 'mousedown' || event.type === 'mouseup') &&
       (event.button === 3 || event.button === 4)) {
       event.preventDefault();
@@ -302,6 +328,12 @@ export class Sender extends LocalInputManager {
     this._queueStateEvent(this.mouse.currentState, this.mouse);
     // Request inside the initiating button gesture, after recording its real position.
     if (event.type === 'mousedown' || event.type === 'mouseup') this._updatePointerLock();
+  }
+
+  _setPointerScreenEdge(edge) {
+    if (edge === this.pointerScreenEdge) return;
+    this.pointerScreenEdge = edge;
+    this.onPointerScreenEdgeChanged?.(edge);
   }
   _onKeyEvent(event) {
     if (!this._inputCaptured && event.type === 'keydown') this.syncInputFocus();
