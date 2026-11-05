@@ -227,8 +227,9 @@ function Access() {
               <input id="usernameInput" autoComplete="off" placeholder="guest" />
             </div>
 
+            <div id="joinMediaSettings"><div id="mediaSettings">
             <div className="field">
-              <label>Microphone</label>
+              <label htmlFor="audioSource">Microphone</label>
               <div className="mic-row">
                 <label className="toggle">
                   <input type="checkbox" id="micCheck" autoComplete="off" defaultChecked />
@@ -255,6 +256,7 @@ function Access() {
               </div>
             </div>
 
+            </div></div>
             <button id="joinButton" type="button">Join</button>
 
             <div id="settingsMenu" className="settings-menu" hidden>
@@ -316,6 +318,12 @@ function Access() {
                 <path d="M15 11V5a3 3 0 0 0-5.94-.6l5.85 5.85c.06-.08.09-.16.09-.25Zm4 0h-2a4.98 4.98 0 0 1-.82 2.74l1.45 1.45A6.96 6.96 0 0 0 19 11ZM3.41 2.86 2 4.27l7 7V11a3 3 0 0 0 3 3c.22 0 .43-.03.63-.08l1.83 1.83A5 5 0 0 1 7 11H5a7 7 0 0 0 6 6.92V21h2v-3.08a6.9 6.9 0 0 0 2.86-1.05l3.87 3.87 1.41-1.41L3.41 2.86Z" />
               </svg>
             </button>
+            <button id="webcamToggleButton" className="connected-icon-button webcam-toggle is-disabled" type="button" aria-pressed="false" aria-label="Enable webcam" title="Enable webcam">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M3 5h12a2 2 0 0 1 2 2v3l5-3v10l-5-3v3a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
+                <path className="webcam-slash" d="m2 2 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" />
+              </svg>
+            </button>
           </div>
           <div
             id="inputSettingsPanel"
@@ -324,6 +332,7 @@ function Access() {
             hidden
           >
             <div id="inputSettingsTitle" className="input-settings-title">Settings</div>
+            <div id="connectedMediaSettings" />
             <div className="input-settings-section">
               <label htmlFor="mouseSensitivityRange">Camera speed</label>
               <div className="sensitivity-control">

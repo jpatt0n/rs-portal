@@ -46,6 +46,10 @@ const joinButton = document.getElementById('joinButton');
 const disconnectButton = document.getElementById('disconnectButton');
 const micStateLabel = document.getElementById('micStateLabel');
 const webcamCheck = document.getElementById('webcamCheck');
+const webcamToggleButton = document.getElementById('webcamToggleButton');
+const mediaSettings = document.getElementById('mediaSettings');
+const joinMediaSettings = document.getElementById('joinMediaSettings');
+const connectedMediaSettings = document.getElementById('connectedMediaSettings');
 const webcamStateLabel = document.getElementById('webcamStateLabel');
 const videoSelect = document.querySelector('select#videoSource');
 const webcamPreview = document.getElementById('webcamPreview');
@@ -88,6 +92,8 @@ let greenRoomBannerTimer = null;
 let isGreenRoomGuest = false;
 /** Whether the show has let this guest in. Unity is the only thing that sets it. */
 let greenRoomAdmitted = false;
+let hostMicrophoneAllowed = true;
+let microphoneHoldReason = '';
 let inputChannelOpenTimer = null;
 let inputChannelRecoveryTimer = null;
 let inputChannelRecovering = false;
@@ -99,6 +105,9 @@ let webcamTransceiver = null;
 let localVideoStream = null;
 let localVideoTrack = null;
 let webcamStartPromise = null;
+let webcamCaptureGeneration = 0;
+let microphoneStartPromise = null;
+let microphoneCaptureGeneration = 0;
 let mouseSensitivity = readStoredMouseSensitivity();
 
 setup();
@@ -194,13 +203,19 @@ document.addEventListener('keydown', event => {
 
 if (webcamCheck) {
   webcamCheck.addEventListener('change', async () => {
-    updateWebcamState();
-    if (webcamCheck.checked) {
-      await startWebcam();
-    } else {
-      stopWebcam();
-    }
+    await setWebcamEnabled(webcamCheck.checked);
   });
+}
+
+webcamToggleButton?.addEventListener('click', async () => {
+  await setWebcamEnabled(!webcamCheck?.checked);
+});
+
+async function setWebcamEnabled(enabled) {
+  if (webcamCheck) webcamCheck.checked = enabled;
+  updateWebcamState();
+  if (enabled) await startWebcam();
+  else stopWebcam();
 }
 
 if (videoSelect) {
@@ -238,6 +253,11 @@ function setUiState(state) {
   document.body.dataset.state = state;
   const isConnected = state === 'connected';
   const showSettings = state === 'ready' || state === 'disconnected';
+  // Move the same controls so capture choice and device selection have one owner across joining.
+  const mediaDestination = isConnected ? connectedMediaSettings : joinMediaSettings;
+  if (mediaSettings && mediaDestination && mediaSettings.parentElement !== mediaDestination) {
+    mediaDestination.appendChild(mediaSettings);
+  }
 
   if (settingsPanel) {
     settingsPanel.style.display = showSettings ? 'block' : 'none';
@@ -455,6 +475,7 @@ function onRemoteTrack(data) {
 }
 
 async function onConnect() {
+  prepareMediaSenders();
   createInputChannel();
   createPointerLockControlChannel();
   createGreenRoomChannel();
@@ -466,6 +487,14 @@ async function onConnect() {
   }
   setUiState('connected');
   showStatsMessage();
+}
+
+function prepareMediaSenders() {
+  if (!renderstreaming) return;
+  // Negotiate both uplinks on connection, even when capture is off. Enabling a device
+  // later replaces a track on the established receiver instead of adding a new m-line.
+  micTransceiver ??= renderstreaming.addTransceiver('audio', { direction: 'sendonly' });
+  webcamTransceiver ??= renderstreaming.addTransceiver('video', { direction: 'sendonly' });
 }
 
 async function onDisconnect(connectionId) {
@@ -503,6 +532,8 @@ async function teardownConnection(message, showReady = true) {
   // Admission does not survive the connection that carried it. A guest who reconnects arrives in
   // the green room again, which is also what Unity does with them.
   greenRoomAdmitted = false;
+  hostMicrophoneAllowed = true;
+  microphoneHoldReason = '';
   updateGreenRoomBanner();
   updateMicState();
   if (showReady) {
@@ -778,7 +809,7 @@ function resetInputChannelState() {
 }
 
 function createGreenRoomChannel() {
-  if (!renderstreaming || !isGreenRoomGuest) {
+  if (!renderstreaming) {
     return;
   }
 
@@ -823,7 +854,7 @@ function createGreenRoomChannel() {
 }
 
 function scheduleGreenRoomRecovery() {
-  if (!renderstreaming || isTearingDown || !isGreenRoomGuest || greenRoomRecoveryTimer != null) {
+  if (!renderstreaming || isTearingDown || greenRoomRecoveryTimer != null) {
     return;
   }
   greenRoomRecoveryTimer = setTimeout(() => {
@@ -861,7 +892,8 @@ function handleGreenRoomMessage(raw) {
   }
 
   if (message.type === 'state') {
-    void applyGreenRoomAdmission(message.admitted === true);
+    void applyGreenRoomAdmission(message.admitted === true,
+      message.microphoneAllowed ?? message.admitted === true, message.microphoneHoldReason || '');
   }
 }
 
@@ -869,23 +901,22 @@ function handleGreenRoomMessage(raw) {
  * Admission controls microphone routing and the waiting-room banner.
  * Webcam capture and sending are independently controlled by the checkbox.
  */
-async function applyGreenRoomAdmission(admitted) {
-  if (greenRoomAdmitted === admitted) {
-    updateGreenRoomBanner();
-    updateMicState();
-    return;
-  }
-
+async function applyGreenRoomAdmission(admitted, microphoneAllowed = admitted, holdReason = '') {
+  const previouslyAllowed = mayGoLive();
   greenRoomAdmitted = admitted;
+  hostMicrophoneAllowed = microphoneAllowed;
+  microphoneHoldReason = holdReason;
   updateGreenRoomBanner();
   updateMicState();
 
-  if (!admitted) {
+  if (!mayGoLive()) {
+    clearMicrophoneStart();
+    stopMicrophone();
     return;
   }
 
   // Keep microphone startup behind admission and its negotiation settle delay.
-  scheduleMicrophoneStart();
+  if (!previouslyAllowed) scheduleMicrophoneStart();
 }
 
 function updateGreenRoomBanner() {
@@ -899,11 +930,25 @@ function updateGreenRoomBanner() {
   }
 
   const connected = document.body.dataset.state === 'connected';
-  if (!isGreenRoomGuest || !connected) {
+  if (!connected) {
     greenRoomBanner.hidden = true;
     return;
   }
 
+  if (!hostMicrophoneAllowed && (microphoneHoldReason === 'story' || microphoneHoldReason === 'host')) {
+    greenRoomBanner.hidden = false;
+    greenRoomBanner.classList.toggle('is-admitted', false);
+    if (greenRoomTitle) greenRoomTitle.textContent = microphoneHoldReason === 'story'
+      ? 'Microphone held · off scene' : 'Microphone muted by host';
+    if (greenRoomDetail) greenRoomDetail.textContent = microphoneHoldReason === 'story'
+      ? 'You can still hear the show. Your mic returns when you enter the scene, appear on webcam TV, or a manager unmutes you.'
+      : 'You can still hear the show. A manager can release your mic; your own mute setting is preserved.';
+    return;
+  }
+  if (!isGreenRoomGuest) {
+    greenRoomBanner.hidden = true;
+    return;
+  }
   greenRoomBanner.hidden = false;
   greenRoomBanner.classList.toggle('is-admitted', greenRoomAdmitted);
 
@@ -1022,6 +1067,14 @@ async function setupVideoInputSelect() {
 }
 
 function updateWebcamState() {
+  if (webcamToggleButton) {
+    const enabled = !!webcamCheck?.checked;
+    const label = enabled ? 'Disable webcam' : 'Enable webcam';
+    webcamToggleButton.classList.toggle('is-disabled', !enabled);
+    webcamToggleButton.setAttribute('aria-pressed', String(enabled));
+    webcamToggleButton.setAttribute('aria-label', label);
+    webcamToggleButton.title = label;
+  }
   if (webcamStateLabel && webcamCheck) {
     const settings = localVideoTrack && localVideoTrack.readyState === 'live'
       ? localVideoTrack.getSettings?.()
@@ -1032,7 +1085,7 @@ function updateWebcamState() {
     webcamStateLabel.textContent = webcamCheck.checked ? `Enabled${resolution}` : 'Disabled';
   }
   if (videoSelect) {
-    videoSelect.disabled = !(webcamCheck && webcamCheck.checked);
+    videoSelect.disabled = false;
   }
   if (webcamPreview && webcamPreviewPlaceholder) {
     const wrapper = webcamPreview.closest('.webcam-preview');
@@ -1082,7 +1135,15 @@ async function fallbackToRawMicrophoneTrack(reason) {
 }
 
 async function startMicrophone() {
-  if (!renderstreaming) {
+  if (microphoneStartPromise) return microphoneStartPromise;
+  const pending = startMicrophoneInternal(microphoneCaptureGeneration);
+  microphoneStartPromise = pending;
+  try { await pending; }
+  finally { if (microphoneStartPromise === pending) microphoneStartPromise = null; }
+}
+
+async function startMicrophoneInternal(generation) {
+  if (!renderstreaming || !mayGoLive() || !micCheck?.checked || isTearingDown) {
     return;
   }
 
@@ -1109,16 +1170,23 @@ async function startMicrophone() {
     }
   };
 
+  let capturedStream;
   try {
-    localAudioRawStream = await navigator.mediaDevices.getUserMedia(constraints);
+    capturedStream = await navigator.mediaDevices.getUserMedia(constraints);
   } catch (err) {
+    if (generation !== microphoneCaptureGeneration) return;
     setStatusMessage(`Microphone error: ${err.message || err}`);
     micCheck.checked = false;
     updateMicState();
     return;
   }
 
-  const rawTrack = localAudioRawStream.getAudioTracks()[0];
+  if (generation !== microphoneCaptureGeneration || !renderstreaming || !mayGoLive() || !micCheck?.checked || isTearingDown) {
+    capturedStream.getTracks().forEach(track => track.stop());
+    return;
+  }
+  localAudioRawStream = capturedStream;
+  const rawTrack = capturedStream.getAudioTracks()[0];
   if (!rawTrack) {
     stopMicrophone();
     return;
@@ -1129,17 +1197,24 @@ async function startMicrophone() {
 
   if (rnnoiseConfig.enabled) {
     try {
-      rnnoiseProcessor = await createRnnoiseProcessor(localAudioRawStream, rnnoiseConfig);
+      const processor = await createRnnoiseProcessor(capturedStream, rnnoiseConfig);
+      if (generation !== microphoneCaptureGeneration || !mayGoLive() || !micCheck?.checked || isTearingDown) {
+        await processor.close();
+        return;
+      }
+      rnnoiseProcessor = processor;
       rnnoiseProcessor.setOnError((error) => {
         void fallbackToRawMicrophoneTrack(error);
       });
       localAudioTrack = rnnoiseProcessor.getTrack();
       localAudioStream = new MediaStream([localAudioTrack]);
     } catch (err) {
+      if (generation !== microphoneCaptureGeneration) return;
       await fallbackToRawMicrophoneTrack(err);
     }
   }
 
+  if (generation !== microphoneCaptureGeneration) return;
   if (!localAudioTrack) {
     stopMicrophone();
     return;
@@ -1158,23 +1233,17 @@ async function startMicrophone() {
 async function ensureMicrophoneTrackAttached() {
   // The last gate before anything of the guest's reaches the wire. Every caller checks first; this
   // is here so that no future one has to be trusted to.
-  if (!renderstreaming || !localAudioTrack || !mayGoLive()) {
+  if (!renderstreaming || !localAudioTrack || !mayGoLive() || !micCheck?.checked || isTearingDown) {
     return;
   }
 
-  if (micTransceiver && micTransceiver.sender) {
-    try {
-      await micTransceiver.sender.replaceTrack(localAudioTrack);
-      return;
-    } catch (err) {
-      // fall through to create a new transceiver
-    }
-  }
-
-  micTransceiver = renderstreaming.addTransceiver(localAudioTrack, { direction: 'sendonly' });
+  prepareMediaSenders();
+  await micTransceiver.sender.replaceTrack(localAudioTrack);
 }
 
 function stopMicrophone() {
+  microphoneCaptureGeneration++;
+  microphoneStartPromise = null;
   if (micTransceiver && micTransceiver.sender) {
     micTransceiver.sender.replaceTrack(null).catch(() => {});
   }
@@ -1203,11 +1272,12 @@ function updateMicState() {
 
   if (micStateLabel && micCheck) {
     micStateLabel.textContent = wanted
-      ? (live ? 'Enabled' : 'Enabled once you are brought in')
+      ? (live ? 'Enabled' : microphoneHoldReason === 'story' ? 'Held · off scene'
+        : microphoneHoldReason === 'host' ? 'Muted by host' : 'Enabled once you are brought in')
       : 'Disabled';
   }
   if (audioSelect) {
-    audioSelect.disabled = !wanted;
+    audioSelect.disabled = false;
   }
 
   if (micToggleButton) {
@@ -1219,11 +1289,14 @@ function updateMicState() {
     micToggleButton.setAttribute('aria-pressed', (!live).toString());
 
     // Still live while a guest waits: what it sets then is what happens the moment they are let in.
+    const hostHold = microphoneHoldReason === 'story' ? 'Your microphone is held while you are off scene'
+      : microphoneHoldReason === 'host' ? 'Your microphone is muted by the host'
+        : 'Your microphone will go live when a cast member brings you in';
     const label = mayGoLive()
       ? (live ? 'Mute microphone' : 'Unmute microphone')
       : (wanted
-        ? 'Your microphone will go live when a cast member brings you in - click to arrive muted'
-        : 'You will arrive muted - click to go live when a cast member brings you in');
+        ? `${hostHold} - click to stay muted after release`
+        : `${hostHold} - click to enable after release`);
     micToggleButton.setAttribute('aria-label', label);
     micToggleButton.title = label;
   }
@@ -1234,7 +1307,7 @@ function updateMicState() {
  * in the green room - not a mute, but a microphone that was never opened.
  */
 function mayGoLive() {
-  return !isGreenRoomGuest || greenRoomAdmitted;
+  return (!isGreenRoomGuest || greenRoomAdmitted) && hostMicrophoneAllowed;
 }
 
 /**
@@ -1271,15 +1344,16 @@ async function startWebcam() {
     return webcamStartPromise;
   }
 
-  webcamStartPromise = startWebcamInternal();
+  const pending = startWebcamInternal(webcamCaptureGeneration);
+  webcamStartPromise = pending;
   try {
-    await webcamStartPromise;
+    await pending;
   } finally {
-    webcamStartPromise = null;
+    if (webcamStartPromise === pending) webcamStartPromise = null;
   }
 }
 
-async function startWebcamInternal() {
+async function startWebcamInternal(generation) {
 
   if (localVideoTrack && localVideoTrack.readyState === 'live') {
     localVideoTrack.enabled = true;
@@ -1297,9 +1371,11 @@ async function startWebcamInternal() {
     }
   };
 
+  let capturedStream;
   try {
-    localVideoStream = await navigator.mediaDevices.getUserMedia(constraints);
+    capturedStream = await navigator.mediaDevices.getUserMedia(constraints);
   } catch (err) {
+    if (generation !== webcamCaptureGeneration) return;
     setStatusMessage(`Webcam error: ${err.message || err}`);
     if (webcamCheck) {
       webcamCheck.checked = false;
@@ -1309,12 +1385,12 @@ async function startWebcamInternal() {
   }
 
   // The checkbox can be cleared while the browser permission prompt is open.
-  if (!webcamCheck?.checked || isTearingDown) {
-    localVideoStream.getTracks().forEach(track => track.stop());
-    localVideoStream = null;
+  if (generation !== webcamCaptureGeneration || !webcamCheck?.checked || isTearingDown) {
+    capturedStream.getTracks().forEach(track => track.stop());
     updateWebcamState();
     return;
   }
+  localVideoStream = capturedStream;
   localVideoTrack = localVideoStream.getVideoTracks()[0];
   if (!localVideoTrack) {
     return;
@@ -1416,21 +1492,14 @@ async function ensureWebcamTrackAttached() {
     return;
   }
 
-  if (webcamTransceiver && webcamTransceiver.sender) {
-    try {
-      await webcamTransceiver.sender.replaceTrack(localVideoTrack);
-      await configureWebcamSender(webcamTransceiver.sender);
-      return;
-    } catch (err) {
-      // fall through to create a new transceiver
-    }
-  }
-
-  webcamTransceiver = renderstreaming.addTransceiver(localVideoTrack, { direction: 'sendonly' });
-  await configureWebcamSender(webcamTransceiver?.sender);
+  prepareMediaSenders();
+  await webcamTransceiver.sender.replaceTrack(localVideoTrack);
+  await configureWebcamSender(webcamTransceiver.sender);
 }
 
 function stopWebcam() {
+  webcamCaptureGeneration++;
+  webcamStartPromise = null;
   if (localVideoTrack) {
     localVideoTrack.stop();
     localVideoTrack = null;
@@ -1459,8 +1528,9 @@ if (micToggleButton) {
 
 if (audioSelect) {
   audioSelect.addEventListener('change', async () => {
-    if (micCheck && micCheck.checked) {
-      stopMicrophone();
+    // Retire the old device even while muted; unmuting must use the newly selected input.
+    stopMicrophone();
+    if (micCheck?.checked && mayGoLive()) {
       await startMicrophone();
     }
   });
