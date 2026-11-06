@@ -86,8 +86,8 @@ let greenRoomChannel = null;
 let greenRoomRecoveryTimer = null;
 let greenRoomBannerTimer = null;
 /**
- * Whether this page is a guest's, and so subject to the green room at all. Cast members are never
- * held: their pass already says they belong in the room.
+ * Whether this page is a guest's and requires admission. Both guests and cast
+ * members also observe the host's microphone permissions.
  */
 let isGreenRoomGuest = false;
 /** Whether the show has let this guest in. Unity is the only thing that sets it. */
@@ -838,7 +838,11 @@ function createGreenRoomChannel() {
     greenRoomChannel = null;
     scheduleGreenRoomRecovery();
   };
-  const onMessage = event => handleGreenRoomMessage(event.data);
+  const onMessage = event => {
+    if (channel === greenRoomChannel && !isTearingDown) {
+      handleGreenRoomMessage(event.data);
+    }
+  };
 
   if (channel.addEventListener) {
     channel.addEventListener('open', onOpen);
@@ -1100,8 +1104,8 @@ let localAudioRawStream = null;
 let localAudioTrack = null;
 let rnnoiseProcessor = null;
 
-async function fallbackToRawMicrophoneTrack(reason) {
-  if (!localAudioRawStream) {
+async function fallbackToRawMicrophoneTrack(reason, generation) {
+  if (generation !== microphoneCaptureGeneration || !localAudioRawStream) {
     return;
   }
 
@@ -1116,6 +1120,9 @@ async function fallbackToRawMicrophoneTrack(reason) {
     await activeProcessor.close({ stopInputTrack: false }).catch(() => {});
   }
 
+  // Closing AudioContext is asynchronous. A hold, disconnect, or device change
+  // may have retired this capture while it was closing.
+  if (generation !== microphoneCaptureGeneration || rawTrack.readyState !== 'live') return;
   localAudioTrack = rawTrack;
   localAudioStream = localAudioRawStream;
   localAudioTrack.enabled = micCheck ? micCheck.checked : true;
@@ -1123,6 +1130,7 @@ async function fallbackToRawMicrophoneTrack(reason) {
   try {
     await ensureMicrophoneTrackAttached();
   } catch (err) {
+    if (generation !== microphoneCaptureGeneration) return;
     setStatusMessage(`Microphone send error: ${err.message || err}`);
     micCheck.checked = false;
     updateMicState();
@@ -1130,6 +1138,7 @@ async function fallbackToRawMicrophoneTrack(reason) {
     return;
   }
 
+  if (generation !== microphoneCaptureGeneration) return;
   console.warn('[RNNoise] Falling back to direct microphone track:', reason);
   setStatusMessage('RNNoise fallback active: using direct microphone audio.');
 }
@@ -1204,13 +1213,13 @@ async function startMicrophoneInternal(generation) {
       }
       rnnoiseProcessor = processor;
       rnnoiseProcessor.setOnError((error) => {
-        void fallbackToRawMicrophoneTrack(error);
+        void fallbackToRawMicrophoneTrack(error, generation);
       });
       localAudioTrack = rnnoiseProcessor.getTrack();
       localAudioStream = new MediaStream([localAudioTrack]);
     } catch (err) {
       if (generation !== microphoneCaptureGeneration) return;
-      await fallbackToRawMicrophoneTrack(err);
+      await fallbackToRawMicrophoneTrack(err, generation);
     }
   }
 
@@ -1223,6 +1232,7 @@ async function startMicrophoneInternal(generation) {
   try {
     await ensureMicrophoneTrackAttached();
   } catch (err) {
+    if (generation !== microphoneCaptureGeneration) return;
     setStatusMessage(`Microphone send error: ${err.message || err}`);
     micCheck.checked = false;
     updateMicState();
