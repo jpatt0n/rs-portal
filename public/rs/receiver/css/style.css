@@ -575,18 +575,6 @@ body[data-state="waiting"] .status {
   margin-top: 8px;
 }
 
-.ghost-button.disconnect {
-  top: auto;
-  bottom: 18px;
-  left: auto;
-  right: 18px;
-  opacity: 0.65;
-}
-
-.ghost-button.disconnect:hover {
-  opacity: 1;
-}
-
 .stats-panel {
   pointer-events: auto;
   position: absolute;

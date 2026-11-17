@@ -283,12 +283,17 @@ function Access() {
           <div id="connectedTools" className="connected-tools" hidden>
             <button
               id="statsToggle"
-              className="ghost-button"
+              className="connected-icon-button"
               type="button"
               aria-expanded="false"
               aria-controls="statsPanel"
+              aria-label="Connection stats"
+              title="Connection stats"
             >
-              Stats
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 14h4v7H4zm6-6h4v13h-4zm6-5h4v18h-4z" /></svg>
+            </button>
+            <button id="disconnectButton" className="connected-icon-button" type="button" aria-label="Disconnect" title="Disconnect" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 2h2v10h-2zm6.36 2.64-1.42 1.42a8 8 0 1 1-7.88 0L6.64 4.64a10 10 0 1 0 10.72 0Z" /></svg>
             </button>
             <button
               id="inputSettingsToggle"
@@ -365,9 +370,6 @@ function Access() {
             </div>
           </div>
 
-          <button id="disconnectButton" className="ghost-button disconnect" type="button" hidden>
-            Disconnect
-          </button>
         </div>
       </div>
     </div>
